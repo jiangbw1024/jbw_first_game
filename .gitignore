@@ -1,0 +1,28 @@
+# ========== 系统缓存 ==========
+.DS_Store
+Thumbs.db
+
+# ========== 本地 AI 工具配置（个人环境，不共享） ==========
+.agents/
+.workbuddy/
+dsh-plugins/
+screenshots/
+openspec/
+
+# ========== 大体积压缩包/资源包 ==========
+*.zip
+*.rar
+*.7z
+*.pak
+
+# ========== Godot 引擎缓存/导出产物 ==========
+.godot/
+export/
+build/
+*.import
+
+# ========== 临时/日志文件 ==========
+*.log
+*.tmp
+*.bak
+
