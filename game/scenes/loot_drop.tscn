@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/loot_drop.gd" id="1_drop"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_drop"]
+size = Vector3(0.45, 0.45, 0.45)
+
+[node name="LootDrop" type="StaticBody3D"]
+script = ExtResource("1_drop")
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+shape = SubResource("BoxShape3D_drop")

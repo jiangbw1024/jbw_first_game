@@ -1,0 +1,36 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/shop/shop_npc.gd" id="1_npc"]
+
+[sub_resource type="CapsuleShape3D" id="ShapeNpc"]
+radius = 0.45
+height = 1.9
+
+[sub_resource type="CapsuleMesh" id="MeshNpc"]
+radius = 0.45
+height = 1.9
+
+[sub_resource type="StandardMaterial3D" id="MatNpc"]
+albedo_color = Color(0.35, 0.72, 0.62, 1)
+roughness = 0.6
+metallic = 0.3
+
+[node name="ShopNpc" type="StaticBody3D"]
+script = ExtResource("1_npc")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+shape = SubResource("ShapeNpc")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+mesh = SubResource("MeshNpc")
+material_override = SubResource("MatNpc")
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
+pixel_size = 0.004
+billboard = 1
+outline_size = 12
+text = "商店老板"
+font_size = 64

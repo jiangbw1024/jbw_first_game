@@ -1,0 +1,143 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scenes/world.gd" id="1_world"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_hud"]
+[ext_resource type="PackedScene" path="res://scenes/terrain3d_world.tscn" id="4_terrain"]
+[ext_resource type="Script" path="res://scenes/build.gd" id="5_build"]
+[ext_resource type="Script" path="res://scripts/town/town_builder.gd" id="6_town"]
+[ext_resource type="Script" path="res://scripts/shop/shop_service.gd" id="7_shop"]
+[ext_resource type="Script" path="res://scripts/fx/fx_root.gd" id="8_fx"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.36, 0.44, 0.52, 1)
+sky_horizon_color = Color(0.68, 0.71, 0.71, 1)
+sky_energy_multiplier = 0.9
+ground_bottom_color = Color(0.14, 0.15, 0.15, 1)
+ground_horizon_color = Color(0.68, 0.71, 0.71, 1)
+
+[sub_resource type="Sky" id="SkyRes"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="EnvRes"]
+background_mode = 2
+sky = SubResource("SkyRes")
+ambient_light_source = 3
+ambient_light_sky_contribution = 1.0
+; 环境光是"阴影里的颜色"。设 0 会让背光面变成死黑（看起来像贴图丢失），
+; 设太高又会把方向光的影子冲淡。0.85 是"能看清阴影里的细节、又保留明暗对比"的位置。
+ambient_light_energy = 0.85
+; SSAO：物体与地面/彼此接触的缝隙会发暗。
+; 没有它，所有东西都像"贴"在画面上，这是灰盒显得廉价的最大原因之一。
+ssao_enabled = true
+ssao_radius = 1.4
+ssao_intensity = 2.6
+ssao_power = 1.6
+ssao_detail = 0.6
+ssao_light_affect = 0.15
+; Glow：枪口火光、曳光、UI 高光会溢出光晕，而不是一块死板的亮色
+glow_enabled = true
+glow_intensity = 0.45
+glow_strength = 1.0
+glow_bloom = 0.04
+glow_hdr_threshold = 1.0
+tonemap_mode = 3
+adjustment_enabled = true
+adjustment_contrast = 1.08
+adjustment_saturation = 0.86
+fog_enabled = true
+fog_light_color = Color(0.62, 0.66, 0.67, 1)
+fog_density = 0.0035
+fog_aerial_perspective = 0.5
+fog_sun_scatter = 0.25
+fog_sky_affect = 0.55
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_world")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-50, -35, 0)
+light_color = Color(1, 0.96, 0.90, 1)
+light_energy = 1.35
+; 太阳的角直径：0 = 点光源（影子锐利），越大影子越虚。
+; 1.2 相当于把太阳当成一盏大柔光箱，影子会淡到几乎看不见 —— 那不是户外日光，是影棚
+shadow_enabled = true
+directional_shadow_max_distance = 150.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("EnvRes")
+
+[node name="Terrain" parent="." instance=ExtResource("4_terrain")]
+
+[node name="Town" type="Node3D" parent="."]
+script = ExtResource("6_town")
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="Buildings" type="Node3D" parent="."]
+script = ExtResource("5_build")
+
+[node name="FX" type="Node3D" parent="."]
+script = ExtResource("8_fx")
+
+[node name="Targets" type="Node3D" parent="."]
+
+[node name="Zombies" type="Node3D" parent="."]
+
+[node name="Loot" type="Node3D" parent="."]
+
+[node name="ShopService" type="Node" parent="."]
+script = ExtResource("7_shop")
+
+[node name="Spawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Players")
+spawn_limit = 16
+_spawnable_scenes = PackedStringArray("res://scenes/player.tscn")
+
+[node name="Menu" type="CanvasLayer" parent="."]
+
+[node name="Center" type="CenterContainer" parent="Menu"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Menu/Center"]
+custom_minimum_size = Vector2(340, 0)
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Menu/Center/VBox"]
+theme_override_font_sizes/font_size = 28
+text = "联机沙盒"
+horizontal_alignment = 1
+
+[node name="HostBtn" type="Button" parent="Menu/Center/VBox"]
+text = "创建房间（我是主机）"
+
+[node name="IpEdit" type="LineEdit" parent="Menu/Center/VBox"]
+placeholder_text = "服务器 IP"
+text = "127.0.0.1"
+alignment = 1
+
+[node name="JoinBtn" type="Button" parent="Menu/Center/VBox"]
+text = "加入房间"
+
+[node name="Status" type="Label" parent="Menu/Center/VBox"]
+theme_override_font_sizes/font_size = 14
+text = "选一个开始"
+horizontal_alignment = 1
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Hint" type="Label" parent="UI"]
+offset_left = 40.0
+offset_top = 28.0
+offset_right = 1200.0
+offset_bottom = 76.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.06, 0.08, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 18
+text = "左键开火 · R 换弹 · 右键推击 · V 近战 · E 拾取/搜刮 · Tab 背包 · H 急救包 · F 手电 · Shift 冲刺 · ESC 释放鼠标"
+
+[node name="HUD" parent="." instance=ExtResource("3_hud")]

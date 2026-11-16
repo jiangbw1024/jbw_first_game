@@ -1,0 +1,90 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scenes/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/interact/player_interact.gd" id="2_interact"]
+[ext_resource type="Script" path="res://scripts/hand_item.gd" id="3_hand"]
+[ext_resource type="Script" path="res://scripts/view/weapon_view.gd" id="4_view"]
+[ext_resource type="Script" path="res://scripts/combat/combat.gd" id="5_combat"]
+[ext_resource type="Script" path="res://scripts/view/knife_view.gd" id="6_knife"]
+
+[sub_resource type="CapsuleShape3D" id="ShapeBody"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="MeshBody"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="MatBody"]
+albedo_color = Color(0.86, 0.42, 0.28, 1)
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="MeshNose"]
+size = Vector3(0.24, 0.24, 0.5)
+
+[sub_resource type="SceneReplicationConfig" id="RepConfig"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_player")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("ShapeBody")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("MeshBody")
+material_override = SubResource("MatBody")
+
+[node name="Nose" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -0.45)
+mesh = SubResource("MeshNose")
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+pixel_size = 0.004
+billboard = 1
+outline_size = 12
+text = "玩家"
+font_size = 64
+
+[node name="Head" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.58, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head"]
+fov = 88.0
+near = 0.05
+far = 400.0
+
+[node name="WeaponView" type="Node3D" parent="Head/Camera3D"]
+script = ExtResource("4_view")
+
+[node name="KnifeView" type="Node3D" parent="Head/Camera3D"]
+visible = false
+script = ExtResource("6_knife")
+
+[node name="Flashlight" type="SpotLight3D" parent="Head/Camera3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, -0.10, 0)
+light_color = Color(1, 0.96, 0.86, 1)
+light_energy = 3.2
+shadow_enabled = true
+spot_range = 26.0
+spot_angle = 40.0
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("RepConfig")
+replication_interval = 0.033
+
+[node name="Interact" type="Node" parent="."]
+script = ExtResource("2_interact")
+
+[node name="HandItem" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 0.55, -0.35)
+script = ExtResource("3_hand")
+
+[node name="Combat" type="Node" parent="."]
+script = ExtResource("5_combat")

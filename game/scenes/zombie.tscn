@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy/zombie.gd" id="1_zombie"]
+
+[sub_resource type="CapsuleShape3D" id="ShapeBody"]
+radius = 0.34
+height = 1.6
+
+[sub_resource type="SphereShape3D" id="ShapeHead"]
+radius = 0.22
+
+[sub_resource type="SceneReplicationConfig" id="RepConfig"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+
+[node name="Zombie" type="CharacterBody3D"]
+script = ExtResource("1_zombie")
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("ShapeBody")
+
+[node name="Head" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.68, -0.04)
+shape = SubResource("ShapeHead")
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("RepConfig")
+replication_interval = 0.05
