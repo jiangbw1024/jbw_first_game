@@ -2,13 +2,13 @@
 # 沙盒 · 启动脚本
 #
 # 用法（在本目录下）：
-#   ./run.sh            直接进单机（当前主玩法：打丧尸）
-#   ./run.sh solo       同上
-#   ./run.sh menu       弹出联机菜单（创建/加入房间）
-#   ./run.sh both       同机开两个窗口，自动一个主机一个客户端（最适合测试联机）
-#   ./run.sh host       直接当主机（跳过菜单）
-#   ./run.sh join 1.2.3.4   直接连到某个 IP
-#   ./run.sh editor     打开 Godot 编辑器（看场景树、改属性）
+#   ./run.sh                打开开始页，自己选「单机 / 联机」
+#   ./run.sh solo           跳过开始页，直接单机（本地存档）
+#   ./run.sh online         跳过开始页，直接走联机登录（有 token 会自动进）
+#   ./run.sh host           直接当主机（不等菜单，无账号）
+#   ./run.sh join 1.2.3.4   直接连到某个 IP（无账号）
+#   ./run.sh both           同机开两个窗口，一个主机一个客户端（最适合测联机）
+#   ./run.sh editor         打开 Godot 编辑器（看场景树、改属性）
 #
 # 为什么要有这个脚本：Godot 可执行文件在 tools/Godot.app/Contents/MacOS/ 里，
 # 每次手敲那串路径既长又容易错。更重要的是 —— 路径里一旦有空格就会失败，
@@ -25,15 +25,22 @@ if [ ! -x "$GODOT" ]; then
   exit 1
 fi
 
-cmd="${1:-solo}"
+cmd="${1:-start}"
 
 case "$cmd" in
   solo)
-    # 单机 = 本地开一个没人连的主机：网络代码全保留，开联机时只改这一个参数
+    # 单机 = 本地开一个没人连的主机：网络代码全保留，开联机时只改这一个参数。
+    # 不登录也能玩，进度写 user://local_save.json。
     exec "$GODOT" --path "$GAME" -- --solo
     ;;
-  menu)
+  start|menu)
+    # 不传任何参数 = 打开开始页（单机 / 联机二选一）。
+    # menu 保留成别名，免得老习惯失效。
     exec "$GODOT" --path "$GAME"
+    ;;
+  online)
+    # --online 只负责"跳过开始页"，登录还是照做
+    exec "$GODOT" --path "$GAME" -- --online
     ;;
   host|server)
     exec "$GODOT" --path "$GAME" -- --server
@@ -55,7 +62,7 @@ case "$cmd" in
     exec "$GODOT" --editor --path "$GAME"
     ;;
   *)
-    echo "用法： ./run.sh [solo|menu|both|host|join <IP>|editor]"
+    echo "用法： ./run.sh [start|solo|online|both|host|join <IP>|editor]"
     exit 1
     ;;
 esac

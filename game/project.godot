@@ -12,7 +12,7 @@ config_version=5
 
 config/name="联机沙盒"
 config/description="一个用来理解联机架构的 3D 骨架"
-run/main_scene="res://scenes/world.tscn"
+run/main_scene="res://scenes/start/start.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [display]
@@ -24,8 +24,12 @@ window/stretch/mode="canvas_items"
 [autoload]
 
 Net="*res://scripts/net.gd"
+Launch="*res://scripts/launch.gd"
 GameState="*res://scripts/game_state.gd"
 Sfx="*res://scripts/audio/sfx.gd"
+HttpManager="*res://scripts/network/http_manager.gd"
+Account="*res://scripts/account/local_account.gd"
+AccountSession="*res://scripts/account/account_session.gd"
 
 [input]
 

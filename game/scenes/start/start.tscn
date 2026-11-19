@@ -1,0 +1,370 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://scenes/start/start.gd" id="1_start"]
+[ext_resource type="Texture2D" path="res://scenes/login/login_backdrop.png" id="2_backdrop"]
+
+[sub_resource type="StyleBoxFlat" id="CardStyle"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.075, 0.071, 0.065, 0.93)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.94, 0.91, 0.86, 0.1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0, 0, 0, 0.32)
+shadow_size = 16
+
+[sub_resource type="StyleBoxFlat" id="PrimaryNormal"]
+content_margin_left = 20.0
+content_margin_top = 14.0
+content_margin_right = 20.0
+content_margin_bottom = 14.0
+bg_color = Color(0.937, 0.914, 0.867, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="PrimaryHover"]
+content_margin_left = 20.0
+content_margin_top = 14.0
+content_margin_right = 20.0
+content_margin_bottom = 14.0
+bg_color = Color(1, 0.969, 0.902, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="PrimaryPressed"]
+content_margin_left = 20.0
+content_margin_top = 14.0
+content_margin_right = 20.0
+content_margin_bottom = 14.0
+bg_color = Color(0.835, 0.808, 0.757, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="GhostNormal"]
+content_margin_left = 20.0
+content_margin_top = 14.0
+content_margin_right = 20.0
+content_margin_bottom = 14.0
+bg_color = Color(0.94, 0.91, 0.86, 0.02)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.94, 0.91, 0.86, 0.22)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="GhostHover"]
+content_margin_left = 20.0
+content_margin_top = 14.0
+content_margin_right = 20.0
+content_margin_bottom = 14.0
+bg_color = Color(0.94, 0.91, 0.86, 0.07)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.94, 0.91, 0.86, 0.34)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxEmpty" id="FlatNormal"]
+
+[sub_resource type="StyleBoxFlat" id="FlatHover"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0, 0, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="DividerStyle"]
+bg_color = Color(0.94, 0.91, 0.86, 0.12)
+
+[sub_resource type="StyleBoxFlat" id="RuleFaint"]
+bg_color = Color(0.94, 0.91, 0.86, 0.07)
+
+[node name="Start" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_start")
+
+[node name="Backdrop" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_backdrop")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Tint" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.02, 0.024, 0.028, 0.62)
+
+[node name="Layout" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 72
+theme_override_constants/margin_top = 56
+theme_override_constants/margin_right = 64
+theme_override_constants/margin_bottom = 48
+
+[node name="Row" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+theme_override_constants/separation = 64
+
+[node name="Left" type="VBoxContainer" parent="Layout/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+alignment = 1
+theme_override_constants/separation = 0
+
+[node name="Brand" type="Label" parent="Layout/Row/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.6, 0.28, 1)
+theme_override_font_sizes/font_size = 12
+text = "联机沙盒 · 末日拾荒"
+
+[node name="Gap1" type="Control" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Layout/Row/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 40
+text = "今晚从哪儿开始"
+
+[node name="Gap2" type="Control" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="Subtitle" type="Label" parent="Layout/Row/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_font_sizes/font_size = 15
+text = "一个人拾荒建基地，或者叫上人一起守夜"
+
+[node name="Gap3" type="Control" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="SoloBtn" type="Button" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(300, 52)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.09, 0.08, 0.07, 1)
+theme_override_colors/font_hover_color = Color(0.09, 0.08, 0.07, 1)
+theme_override_colors/font_pressed_color = Color(0.09, 0.08, 0.07, 1)
+theme_override_colors/font_focus_color = Color(0.09, 0.08, 0.07, 1)
+theme_override_font_sizes/font_size = 17
+theme_override_styles/normal = SubResource("PrimaryNormal")
+theme_override_styles/hover = SubResource("PrimaryHover")
+theme_override_styles/pressed = SubResource("PrimaryPressed")
+theme_override_styles/focus = SubResource("PrimaryHover")
+text = "单人进入"
+
+[node name="Gap4" type="Control" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="OnlineBtn" type="Button" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(300, 52)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_hover_color = Color(1, 0.969, 0.902, 1)
+theme_override_colors/font_pressed_color = Color(0.835, 0.808, 0.757, 1)
+theme_override_colors/font_focus_color = Color(1, 0.969, 0.902, 1)
+theme_override_font_sizes/font_size = 17
+theme_override_styles/normal = SubResource("GhostNormal")
+theme_override_styles/hover = SubResource("GhostHover")
+theme_override_styles/pressed = SubResource("GhostNormal")
+theme_override_styles/focus = SubResource("GhostHover")
+text = "联机进入"
+
+[node name="Gap5" type="Control" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Hint" type="Label" parent="Layout/Row/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.45, 0.42, 1)
+theme_override_font_sizes/font_size = 13
+text = "单人不需要账号 · 联机需要登录后创建或加入房间"
+
+[node name="Gap6" type="Control" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+
+[node name="QuitBtn" type="Button" parent="Layout/Row/Left"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_colors/font_hover_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_pressed_color = Color(0.47, 0.45, 0.42, 1)
+theme_override_colors/font_focus_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("FlatNormal")
+theme_override_styles/hover = SubResource("FlatHover")
+theme_override_styles/pressed = SubResource("FlatNormal")
+theme_override_styles/focus = SubResource("FlatHover")
+text = "退出游戏"
+alignment = 0
+
+[node name="Right" type="VBoxContainer" parent="Layout/Row"]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+size_flags_vertical = 4
+alignment = 1
+
+[node name="Card" type="PanelContainer" parent="Layout/Row/Right"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("CardStyle")
+
+[node name="Margin" type="MarginContainer" parent="Layout/Row/Right/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="Layout/Row/Right/Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Layout/Row/Right/Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Caption" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.47, 0.45, 0.42, 1)
+theme_override_font_sizes/font_size = 12
+text = "现场档案"
+
+[node name="Dot" type="ColorRect" parent="Layout/Row/Right/Card/Margin/VBox/Header"]
+custom_minimum_size = Vector2(6, 6)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.47, 0.45, 0.42, 1)
+
+[node name="Rule1" type="Panel" parent="Layout/Row/Right/Card/Margin/VBox"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_styles/panel = SubResource("DividerStyle")
+
+[node name="LocalRow" type="HBoxContainer" parent="Layout/Row/Right/Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/LocalRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_font_sizes/font_size = 13
+text = "本地档案"
+
+[node name="LocalValue" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/LocalRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 13
+text = "—"
+horizontal_alignment = 2
+
+[node name="PlayedRow" type="HBoxContainer" parent="Layout/Row/Right/Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/PlayedRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_font_sizes/font_size = 13
+text = "上次游玩"
+
+[node name="PlayedValue" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/PlayedRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 13
+text = "—"
+horizontal_alignment = 2
+
+[node name="TimeRow" type="HBoxContainer" parent="Layout/Row/Right/Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/TimeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_font_sizes/font_size = 13
+text = "生存时长"
+
+[node name="TimeValue" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/TimeRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 13
+text = "—"
+horizontal_alignment = 2
+
+[node name="Rule2" type="Panel" parent="Layout/Row/Right/Card/Margin/VBox"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_styles/panel = SubResource("RuleFaint")
+
+[node name="AccountRow" type="HBoxContainer" parent="Layout/Row/Right/Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/AccountRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_font_sizes/font_size = 13
+text = "联机账号"
+
+[node name="AccountValue" type="Label" parent="Layout/Row/Right/Card/Margin/VBox/AccountRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 13
+text = "未登录"
+horizontal_alignment = 2

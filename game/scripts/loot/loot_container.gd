@@ -100,7 +100,7 @@ func _box(size: Vector3, pos: Vector3, mat: Material, parent: Node3D = null) -> 
 func prompt_text(_who: Node3D) -> String:
 	if looted:
 		return "「%s」已经搜过了" % display_name
-	return "按 E 搜刮「%s」" % display_name
+	return "搜刮「%s」" % display_name
 
 
 func can_interact(_who: Node3D) -> bool:

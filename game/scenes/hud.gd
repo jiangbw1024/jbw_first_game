@@ -4,7 +4,6 @@ extends CanvasLayer
 ##
 ## S8 增补：交互提示（Prompt）与自动消失的 toast。
 ## 三种信息的生命周期不同，所以分三个通道，不共用一个 Label：
-##   Hint   —— 常驻操作说明（左上）
 ##   Prompt —— 眼前这一下的交互提示（准心下方，随瞄准变化）
 ##   Notice —— 一次性消息（居中，几秒后自己消失）
 
@@ -22,6 +21,11 @@ const MAX_CHAT_LENGTH := 200
 
 var _ping_accum := 0.0
 var _rtt_ms := -1
+var _last_mag := 30
+var _last_reserve := 90
+var _last_reloading := false
+var _knife_equipped := false
+var _weapon_label := "AK47"
 
 # ---- 战斗 UI（S10）----
 var _hp_bg: ColorRect
@@ -42,10 +46,11 @@ var _bag_open := false
 
 func _ready() -> void:
 	chat_input.text_submitted.connect(_on_chat_submitted)
-	_add_line("[color=#8fd6b4]系统[/color] 按 Enter 打开聊天，Esc 取消")
 	GameState.prompt_changed.connect(_on_prompt_changed)
 	GameState.notify.connect(func(t: String, secs: float) -> void: toast(t, secs))
 	GameState.ammo_changed.connect(_on_ammo_changed)
+	GameState.weapon_changed.connect(_on_weapon_changed)
+	_on_weapon_changed(Combat.Slot.PRIMARY, "AK47")
 	_on_prompt_changed("")
 	_build_combat_ui()
 	GameState.health_changed.connect(_on_health_changed)
@@ -54,6 +59,192 @@ func _ready() -> void:
 	_on_health_changed(GameState.player_health, GameState.player_health_max)
 	_build_bag_ui()
 	GameState.inventory_changed.connect(_on_inventory_changed)
+	_build_build_book()
+	_build_equip_bar()
+
+
+# ------------------------------------------------------------
+# 建造图鉴（S12）
+# ------------------------------------------------------------
+### 为什么是"建造模式下自动出现的底部条"，而不是一个 Tab 页：
+##   图鉴的用途是"我正在造东西，想确认还差几根木头"。
+##   这时候让玩家开一个全屏面板、读完再关掉，等于把连续动作切成三段。
+##   所以它必须是**一直挂在视野边缘、随时可瞟一眼**的东西。
+##
+## ★ 为什么每张卡都显示材料而不是只显示名字：
+##   "地基"两个字不告诉你代价。玩家的决策点不是"造哪个"，而是
+##   "我还够造三个地基还是两个" —— 这个数字必须一直在眼前。
+var _book_root: Control
+var _book_cards: Array = []
+var _book_last_on := false
+var _book_last_kind := ""
+var _book_last_sig := -2
+
+const BOOK_CARD_W := 208.0
+const BOOK_CARD_H := 92.0
+const BOOK_GAP := 8.0
+
+func _build_build_book() -> void:
+	_book_root = Control.new()
+	_book_root.anchor_left = 0.5
+	_book_root.anchor_right = 0.5
+	_book_root.anchor_top = 1.0
+	_book_root.anchor_bottom = 1.0
+	_book_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_book_root.visible = false
+	add_child(_book_root)
+
+	var kinds := RecipeDef.ordered_kinds()
+	var total_w: float = float(kinds.size()) * BOOK_CARD_W \
+		+ float(maxi(0, kinds.size() - 1)) * BOOK_GAP
+	_book_root.offset_left = -total_w * 0.5
+	_book_root.offset_right = total_w * 0.5
+	# ★ 底部这 200 像素是"多家争抢"的区域：左下角血条、右下角弹药、
+	#   中间底部还有建造提示。卡片必须整体抬到它们上面，
+	#   否则会出现"读剩余材料时被红色的血条压住"——我在截图里撞到过。
+	_book_root.offset_top = -212.0
+	_book_root.offset_bottom = -212.0 + BOOK_CARD_H
+
+	var hint := Label.new()
+	hint.text = "建造模式 · 1-%d 选件 · T 旋转 · 左键放置 · 右键拆除 · B 退出" % kinds.size()
+	hint.offset_left = -total_w * 0.5
+	hint.offset_right = total_w * 0.5
+	hint.offset_top = BOOK_CARD_H + 6.0
+	hint.offset_bottom = BOOK_CARD_H + 28.0
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 13)
+	hint.add_theme_color_override("font_color", Color(0.72, 0.70, 0.64))
+	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	hint.add_theme_constant_override("outline_size", 4)
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_book_root.add_child(hint)
+
+	for i in kinds.size():
+		var kind := String(kinds[i])
+		var x: float = float(i) * (BOOK_CARD_W + BOOK_GAP)
+
+		var bg := ColorRect.new()
+		bg.color = Color(0.06, 0.065, 0.07, 0.86)
+		bg.position = Vector2(x, 0.0)
+		bg.size = Vector2(BOOK_CARD_W, BOOK_CARD_H)
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_book_root.add_child(bg)
+
+		# 左侧色条：选中时点亮。比"加一个边框"更省事，也更像游戏 UI
+		var bar := ColorRect.new()
+		bar.color = Color(0, 0, 0, 0)
+		bar.position = Vector2(0.0, 0.0)
+		bar.size = Vector2(4.0, BOOK_CARD_H)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(bar)
+
+		var title := Label.new()
+		title.text = "%d  %s" % [i + 1, RecipeDef.name_of(kind)]
+		title.position = Vector2(14.0, 8.0)
+		title.size = Vector2(BOOK_CARD_W - 22.0, 26.0)
+		title.add_theme_font_size_override("font_size", 17)
+		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(title)
+
+		var cost := Label.new()
+		cost.text = RecipeDef.cost_text(kind)
+		cost.position = Vector2(14.0, 36.0)
+		cost.size = Vector2(BOOK_CARD_W - 22.0, 22.0)
+		cost.add_theme_font_size_override("font_size", 13)
+		cost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(cost)
+
+		var afford := Label.new()
+		afford.position = Vector2(14.0, 60.0)
+		afford.size = Vector2(BOOK_CARD_W - 22.0, 22.0)
+		afford.add_theme_font_size_override("font_size", 13)
+		afford.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(afford)
+
+		_book_cards.append({
+			"kind": kind, "bg": bg, "bar": bar,
+			"title": title, "cost": cost, "afford": afford,
+		})
+
+
+func _refresh_build_book() -> void:
+	if _book_cards.is_empty():
+		return
+	var inv = _find_local_inventory()
+	for card in _book_cards:
+		var kind := String(card["kind"])
+		var selected: bool = kind == GameState.build_kind
+		var can := false
+		var detail := ""
+		if inv != null:
+			var cost := RecipeDef.cost_of(kind)
+			can = true
+			var shortest := 999
+			for id in cost:
+				var have: int = inv.count_of(String(id))
+				var need := int(cost[id])
+				if have < need:
+					can = false
+				# 显示"还能造几个"：取所有材料里最紧的那一项
+				shortest = mini(shortest, have / maxi(need, 1))
+			detail = "可造 %d" % shortest if shortest != 999 else "可造 0"
+
+		var bg: ColorRect = card["bg"]
+		var bar: ColorRect = card["bar"]
+		var title: Label = card["title"]
+		var cost_l: Label = card["cost"]
+		var afford: Label = card["afford"]
+
+		bg.color = Color(0.10, 0.105, 0.11, 0.90) if selected else Color(0.055, 0.06, 0.065, 0.82)
+		bar.color = Color(0.86, 0.70, 0.32, 1.0) if selected else Color(0.24, 0.24, 0.24, 0.6)
+		title.add_theme_color_override("font_color",
+			Color(0.96, 0.88, 0.66) if selected else Color(0.74, 0.74, 0.72))
+		cost_l.add_theme_color_override("font_color",
+			Color(0.66, 0.64, 0.58) if can else Color(0.72, 0.42, 0.38))
+		afford.text = detail
+		afford.add_theme_color_override("font_color",
+			Color(0.55, 0.88, 0.60) if can else Color(0.85, 0.38, 0.34))
+
+
+### 图鉴的显隐与重画
+##
+### ★ 为什么不在 _process 里每帧重画：
+##   `add_theme_color_override` 每次调用都会在控件上新建/替换一个主题覆盖项。
+##   每帧对 3 张卡 × 4 个 Label 做这件事，等于每帧新建十几个对象，
+##   既吃 CPU 又让 GC 忙碌。改成"签名变了才重画"，静止时几乎零开销。
+func _update_build_book() -> void:
+	var on := GameState.build_active
+	if on != _book_last_on:
+		_book_last_on = on
+		_book_root.visible = on
+	if not on:
+		return
+
+	var inv = _find_local_inventory()
+	var sig := _inv_signature(inv)
+	if GameState.build_kind != _book_last_kind or sig != _book_last_sig:
+		_book_last_kind = GameState.build_kind
+		_book_last_sig = sig
+		_refresh_build_book()
+
+
+### 只统计"建造会用到的材料"。用它们拼一个小哈希，
+### 数量一变就刷新 —— 比监听 inventory_changed 更省心（后者每次拾取都发）
+func _inv_signature(inv) -> int:
+	if inv == null:
+		return -1
+	var h := 7
+	for id in [ItemDef.WOOD, ItemDef.SCRAP, ItemDef.CLOTH]:
+		h = h * 31 + inv.count_of(String(id))
+	return h
+
+
+# ------------------------------------------------------------
+# 装备栏（玩家已有的切枪 UI 预留位）
+# ------------------------------------------------------------
+func _build_equip_bar() -> void:
+	# 占位：武器栏由玩家自己的实现负责，这里不重复造。
+	pass
 
 
 # ------------------------------------------------------------
@@ -171,22 +362,6 @@ func _build_bag_ui() -> void:
 		cell.add_child(ct)
 
 		_bag_cells.append({"bg": cell, "name": nm, "count": ct})
-
-	var hint := Label.new()
-	hint.text = "Tab 关闭　　H 使用急救包"
-	hint.anchor_left = 0.5
-	hint.anchor_right = 0.5
-	hint.anchor_top = 0.5
-	hint.anchor_bottom = 0.5
-	hint.offset_left = -250.0
-	hint.offset_right = 250.0
-	hint.offset_top = 156.0
-	hint.offset_bottom = 186.0
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 14)
-	hint.add_theme_color_override("font_color", Color(0.60, 0.60, 0.58))
-	_bag_root.add_child(hint)
-
 
 func _on_inventory_changed(inv) -> void:
 	if _bag_cells.is_empty() or inv == null:
@@ -431,6 +606,15 @@ func _process(delta: float) -> void:
 		_vignette_intensity = maxf(0.0, _vignette_intensity - delta * 1.7)
 		_vignette_mat.set_shader_parameter("intensity", _vignette_intensity)
 
+	_update_build_book()
+
+	# 没有 peer（房间菜单阶段）时不能问在线人数，
+	# 否则每帧一条 "No multiplayer peer is assigned"
+	if not Net.has_session():
+		players_label.text = ""
+		rtt_label.text = ""
+		return
+
 	# get_peers() 不包含自己，所以要 +1
 	players_label.text = "在线：%d" % (multiplayer.get_peers().size() + 1)
 
@@ -538,11 +722,32 @@ func toast(text: String, secs := 2.0) -> void:
 ### 余弹低于 1/4 时变红，空仓时提示换弹 —— 这两个提示都很小，
 ## 但少了它们玩家会在关键时刻"以为还有子弹"。
 func _on_ammo_changed(mag: int, reserve: int, reloading: bool) -> void:
-	ammo_label.text = "%d / %d" % [mag, reserve]
-	ammo_label.modulate = Color(1.0, 0.55, 0.45) if mag <= 7 else Color(1, 1, 1)
-	if reloading:
+	_last_mag = mag
+	_last_reserve = reserve
+	_last_reloading = reloading
+	_render_ammo()
+
+
+func _on_weapon_changed(slot: int, label: String) -> void:
+	_knife_equipped = slot == Combat.Slot.KNIFE
+	_weapon_label = label
+	_render_ammo()
+
+
+### 武器区和键位提示分离：这里只显示"手里是什么、还剩多少"。
+## 键位说明统一放进 `game/CONTROLS.md`，不再占用游戏画面。
+func _render_ammo() -> void:
+	if _knife_equipped:
+		ammo_label.text = "%s / ∞" % _weapon_label
+		ammo_label.modulate = Color(0.86, 0.90, 1.0)
+		ammo_hint.text = ""
+		return
+
+	ammo_label.text = "%d / %d" % [_last_mag, _last_reserve]
+	ammo_label.modulate = Color(1.0, 0.55, 0.45) if _last_mag <= 7 else Color(1, 1, 1)
+	if _last_reloading:
 		ammo_hint.text = "换弹中…"
-	elif mag == 0:
-		ammo_hint.text = "按 R 换弹"
+	elif _last_mag == 0:
+		ammo_hint.text = "弹匣已空"
 	else:
 		ammo_hint.text = ""

@@ -28,11 +28,7 @@ const REACH_DOWN := 3.0        # 能往下够多深
 const KIND_FOUNDATION := "foundation"
 const KIND_WALL := "wall"
 
-const HINT_WALK := "WASD 移动 · 空格跳跃 · Shift 冲刺 · Enter 聊天 · B 建造 · 鼠标转视角 · ESC 释放鼠标"
-const HINT_BUILD := "建造模式：左键放置 · 右键拆除 · 1 地基 / 2 墙 · R 旋转 · 对着顶面放可叠高 · 城镇内禁止建造 · B 退出"
-
 @onready var terrain: TerrainBase = $"../Terrain"
-@onready var hint: Label = $"../UI/Hint"
 ## S9 起准心改成了 Reticle（一个自绘的 Control，要随扩散实时张开）。
 ## 旧的 `UI/Crosshair` 已经不存在了，这里不再持有它：建造模式不需要改准心可见性。
 ## 城镇：只用来问"这里禁不禁建"。用软引用而不是 $ 硬路径 ——
@@ -86,10 +82,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		_yaw = (_yaw + 90) % 360
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_1:
-			_kind = KIND_FOUNDATION
-		elif event.keycode == KEY_2:
-			_kind = KIND_WALL
+		# ★ 数字键与图鉴顺序都来自 RecipeDef.ordered_kinds()，
+		#   不在这里硬编码"1=地基 2=墙"。加一种新件时只动配方表一处，
+		#   UI 和按键自动跟上 —— 两边各排一次一定会错位。
+		var kinds := RecipeDef.ordered_kinds()
+		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			var idx: int = int(event.keycode) - int(KEY_1)
+			if idx < kinds.size():
+				_kind = String(kinds[idx])
+				GameState.build_kind = _kind
+				GameState.notify.emit("建造：%s（%s）" % [
+					RecipeDef.name_of(_kind), RecipeDef.cost_text(_kind)], 1.6)
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_try_place()
@@ -103,9 +106,15 @@ func _set_build_mode(on: bool) -> void:
 	_build_mode = on
 	# 告诉其他系统"我在建造"：交互提示会让路，免得瞄墙放砖时弹出商店提示
 	GameState.build_active = on
+	if on:
+		# 首次进入时默认选第一个件，并立刻把选择广播给图鉴 UI，
+		# 否则图鉴会有一段"没有任何卡片高亮"的空窗
+		if _kind.is_empty():
+			var kinds0 := RecipeDef.ordered_kinds()
+			_kind = String(kinds0[0]) if kinds0.size() > 0 else "foundation"
+		GameState.build_kind = _kind
 	if not on:
 		_ghost.visible = false
-	hint.text = HINT_BUILD if on else HINT_WALK
 	print("[S7.5] 建造模式 %s" % ("开启" if on else "关闭"))
 
 
@@ -197,17 +206,37 @@ func _try_place() -> void:
 		return
 
 	if multiplayer.is_server():
-		_server_place(_kind, _cell, _level, _yaw, local.global_position)
+		_server_place(_kind, _cell, _level, _yaw, local.global_position,
+			multiplayer.get_unique_id())
 	else:
 		# 客户端只说"哪一格、第几层"。高度不由它决定。
 		rpc_id(1, "_request_place", _kind, _cell, _level, _yaw)
 
 
 ### 服务器唯一入口：校验 → 计算 → 广播
-func _server_place(kind: String, cell: Vector2i, level: int, yaw: int, from_pos: Vector3) -> bool:
+func _server_place(kind: String, cell: Vector2i, level: int, yaw: int,
+		from_pos: Vector3, peer_id: int) -> bool:
 	if not multiplayer.is_server():
 		return false
 	if not _can_place(kind, cell, level, yaw, from_pos):
+		return false
+
+	# ★ 先校验位置、再扣材料 —— 顺序不能反。
+	#   反过来会出现"材料扣了，但这一格已经有人造过"，玩家白白损失木材。
+	#   所有"收钱的服务"都该先确认能交付，再收钱。
+	var cost := RecipeDef.cost_of(kind)
+	if cost.is_empty():
+		push_warning("[S12] 未知建造件：%s" % kind)
+		return false
+	var p := _player_node(peer_id)
+	if p == null or not p.has_method("spend"):
+		return false
+	if not p.can_afford(cost):
+		if p.is_local():
+			GameState.notify.emit("材料不够：%s 需要 %s" % [
+				RecipeDef.name_of(kind), RecipeDef.cost_text(kind)], 2.0)
+		return false
+	if not p.spend(cost):
 		return false
 
 	var id := _next_id
@@ -230,7 +259,7 @@ func _request_place(kind: String, cell: Vector2i, level: int, yaw: int) -> void:
 	var p := _player_node(sender)
 	if p == null:
 		return
-	if not _server_place(kind, cell, level, yaw, p.global_position):
+	if not _server_place(kind, cell, level, yaw, p.global_position, sender):
 		pass  # 静默拒绝：不告诉作弊者"为什么不行"，减少试探信息
 
 
@@ -282,7 +311,7 @@ func _try_remove() -> void:
 		return
 
 	if multiplayer.is_server():
-		_apply_remove.rpc(id)
+		_server_remove(id, multiplayer.get_unique_id())
 	else:
 		rpc_id(1, "_request_remove", id)
 
@@ -300,7 +329,48 @@ func _request_remove(id: int) -> void:
 		float(info["cell"].x) * GRID, float(info["base"]), float(info["cell"].y) * GRID)
 	if p == null or p.global_position.distance_to(center) > MAX_DISTANCE + GRID:
 		return
+	_server_remove(id, sender)
+
+
+### 服务器唯一的拆除入口：算返还 → 退材料 → 广播删节点。
+##
+### ★ 为什么返还只在服务器算一次，而不是写在 _apply_remove 里：
+##   _apply_remove 是 `call_local`，**每个端都会跑**（它要负责删本地节点）。
+##   把"退材料"写进去，客户端也会跑一遍；虽然 refund() 内部有 is_server 守卫，
+##   但那样等于"靠下游守卫兜住上游的错误"。
+##   账本操作集中在一个明确的地方，比散在各端靠钳制更安全。
+##
+## ★ 为什么返还覆盖"同一格所有更高层"：
+##   抽掉底层地基，上面整摞墙会一起塌（_apply_remove 里的连锁逻辑）。
+##   那些墙也是玩家花的材料，塌掉不退就等于"拆一块地基烧掉整栋楼"。
+func _server_remove(id: int, peer_id: int) -> void:
+	if not multiplayer.is_server() or not _pieces.has(id):
+		return
+	var p := _player_node(peer_id)
+	if p != null and p.has_method("refund"):
+		var back := _refund_for(id)
+		if not back.is_empty():
+			p.refund(back)
 	_apply_remove.rpc(id)
+
+
+### 算出"拆这一块会连带拆掉多少材料"的返还表
+func _refund_for(id: int) -> Dictionary:
+	var out := {}
+	if not _pieces.has(id):
+		return out
+	var base: Dictionary = _pieces[id]
+	var cell: Vector2i = base["cell"]
+	var level := int(base["level"])
+	# 与 _apply_remove 的连锁范围保持一致：同格、层数 >= 当前
+	for other_id in _pieces.keys():
+		var o: Dictionary = _pieces[other_id]
+		if o["cell"] != cell or int(o["level"]) < level:
+			continue
+		var r := RecipeDef.refund_of(String(o["kind"]))
+		for k in r:
+			out[k] = int(out.get(k, 0)) + int(r[k])
+	return out
 
 
 @rpc("authority", "call_local", "reliable")

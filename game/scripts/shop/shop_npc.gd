@@ -1,5 +1,5 @@
 extends Interactable
-## 商店老板：站着不动，被瞄准时说一句话，被按 E 时请求开面板
+## 商店老板：站着不动，被瞄准时说一句话，交互时请求开面板
 ##
 ## 注意 `interact()` 里**只发信号**，不直接买、也不直接开 UI。
 ## 这样 NPC 既不知道面板存在，也不知道价格 —— 换一个 UI 或换一个购买流程都不用动它。
@@ -16,7 +16,7 @@ func _ready() -> void:
 
 
 func prompt_text(_who: Node3D) -> String:
-	return "按 E 与商店老板交易"
+	return "与商店老板交易"
 
 
 func interact(_who: Node3D) -> void:

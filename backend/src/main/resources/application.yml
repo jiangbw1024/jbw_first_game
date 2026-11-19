@@ -1,0 +1,30 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: jbw-game-server
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:jbw_game}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:jbw_app}
+    password: ${DB_PASSWORD:jbw_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+      validation-timeout: 3000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+jbw:
+  jwt:
+    # 生产环境必须通过 JWT_SECRET 覆盖，长度至少 32 字节。
+    secret: ${JWT_SECRET:jbw-game-dev-secret-change-me-32bytes-minimum}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:1440}

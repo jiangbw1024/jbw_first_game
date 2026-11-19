@@ -123,7 +123,7 @@ func can_interact(_who: Node3D) -> bool:
 
 
 func prompt_text(_who: Node3D) -> String:
-	return "按 E 拾取「%s」×%d" % [ItemDef.name_of(item_id), amount]
+	return "拾取「%s」×%d" % [ItemDef.name_of(item_id), amount]
 
 
 func interact(who: Node3D) -> void:

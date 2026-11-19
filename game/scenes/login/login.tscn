@@ -1,0 +1,409 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scenes/login/login.gd" id="1_login"]
+[ext_resource type="Texture2D" path="res://scenes/login/login_backdrop.png" id="2_backdrop"]
+
+[sub_resource type="ButtonGroup" id="TabGroup"]
+allow_unpress = false
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.086, 0.082, 0.075, 0.965)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.37, 0.29, 0.75)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 18
+
+[sub_resource type="StyleBoxFlat" id="TabNormal"]
+content_margin_left = 2.0
+content_margin_top = 6.0
+content_margin_right = 2.0
+content_margin_bottom = 6.0
+bg_color = Color(0, 0, 0, 0)
+border_width_bottom = 1
+border_color = Color(0.94, 0.91, 0.86, 0.10)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+
+[sub_resource type="StyleBoxFlat" id="TabHover"]
+content_margin_left = 2.0
+content_margin_top = 6.0
+content_margin_right = 2.0
+content_margin_bottom = 6.0
+bg_color = Color(0.94, 0.91, 0.86, 0.04)
+border_width_bottom = 1
+border_color = Color(0.94, 0.91, 0.86, 0.20)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+
+[sub_resource type="StyleBoxFlat" id="TabActive"]
+content_margin_left = 2.0
+content_margin_top = 6.0
+content_margin_right = 2.0
+content_margin_bottom = 5.0
+bg_color = Color(0, 0, 0, 0)
+border_width_bottom = 2
+border_color = Color(0.78, 0.60, 0.28, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+
+[sub_resource type="StyleBoxFlat" id="InputNormal"]
+content_margin_left = 12.0
+content_margin_top = 8.0
+content_margin_right = 12.0
+content_margin_bottom = 8.0
+bg_color = Color(0.109, 0.102, 0.094, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.94, 0.91, 0.86, 0.10)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="InputFocus"]
+content_margin_left = 12.0
+content_margin_top = 8.0
+content_margin_right = 12.0
+content_margin_bottom = 8.0
+bg_color = Color(0.135, 0.126, 0.114, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.72, 0.55, 0.27, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="PrimaryNormal"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+bg_color = Color(0.937, 0.914, 0.867, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="PrimaryHover"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+bg_color = Color(1, 0.969, 0.902, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="PrimaryPressed"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+bg_color = Color(0.835, 0.808, 0.757, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="PrimaryDisabled"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+bg_color = Color(0.208, 0.196, 0.176, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="DividerStyle"]
+bg_color = Color(0.94, 0.91, 0.86, 0.12)
+
+[node name="Login" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_login")
+
+[node name="Backdrop" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_backdrop")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Tint" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.020, 0.024, 0.028, 0.30)
+
+[node name="Layout" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 64
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="HBox" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+theme_override_constants/separation = 48
+
+[node name="Left" type="VBoxContainer" parent="Layout/HBox"]
+custom_minimum_size = Vector2(448, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 3
+alignment = 1
+
+[node name="Dossier" type="PanelContainer" parent="Layout/HBox/Left"]
+custom_minimum_size = Vector2(448, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="Margin" type="MarginContainer" parent="Layout/HBox/Left/Dossier"]
+layout_mode = 2
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 32
+
+[node name="VBox" type="VBoxContainer" parent="Layout/HBox/Left/Dossier/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Eyebrow" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.55, 0.27, 1)
+theme_override_font_sizes/font_size = 12
+text = "联机沙盒 · 云端档案"
+
+[node name="Title" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 34
+text = "幸存者档案"
+
+[node name="Subtitle" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_font_sizes/font_size = 14
+text = "进度由服务器保存"
+
+[node name="Rule" type="Panel" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_styles/panel = SubResource("DividerStyle")
+
+[node name="GapTop" type="Control" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="AutoBox" type="VBoxContainer" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AutoTitle" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/AutoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 22
+text = "正在恢复档案"
+
+[node name="AutoName" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/AutoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.60, 0.28, 1)
+theme_override_font_sizes/font_size = 16
+text = ""
+
+[node name="AutoHint" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/AutoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 12
+text = "验证登录状态…"
+
+[node name="FormBox" type="VBoxContainer" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Tabs" type="HBoxContainer" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="LoginTab" type="Button" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox/Tabs"]
+custom_minimum_size = Vector2(72, 36)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.647, 0.627, 0.592, 1)
+theme_override_colors/font_hover_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_pressed_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("TabNormal")
+theme_override_styles/hover = SubResource("TabHover")
+theme_override_styles/pressed = SubResource("TabActive")
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("TabGroup")
+text = "登录"
+
+[node name="RegisterTab" type="Button" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox/Tabs"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_colors/font_hover_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_pressed_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("TabNormal")
+theme_override_styles/hover = SubResource("TabHover")
+theme_override_styles/pressed = SubResource("TabActive")
+toggle_mode = true
+button_group = SubResource("TabGroup")
+text = "注册"
+
+[node name="TabSpacer" type="Control" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox/Tabs"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UsernameLabel" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 12
+text = "账号"
+
+[node name="UsernameEdit" type="LineEdit" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_placeholder_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_colors/caret_color = Color(0.78, 0.60, 0.28, 1)
+theme_override_colors/selection_color = Color(0.72, 0.55, 0.27, 0.35)
+theme_override_styles/normal = SubResource("InputNormal")
+theme_override_styles/focus = SubResource("InputFocus")
+placeholder_text = "3–32 个字符"
+max_length = 32
+
+[node name="PasswordLabel" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 12
+text = "密码"
+
+[node name="PasswordEdit" type="LineEdit" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_placeholder_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_colors/caret_color = Color(0.78, 0.60, 0.28, 1)
+theme_override_colors/selection_color = Color(0.72, 0.55, 0.27, 0.35)
+theme_override_styles/normal = SubResource("InputNormal")
+theme_override_styles/focus = SubResource("InputFocus")
+placeholder_text = "至少 6 位"
+max_length = 64
+secret = true
+
+[node name="ConfirmLabel" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 12
+text = "确认密码"
+
+[node name="ConfirmEdit" type="LineEdit" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+visible = false
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_colors/font_placeholder_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_colors/caret_color = Color(0.78, 0.60, 0.28, 1)
+theme_override_colors/selection_color = Color(0.72, 0.55, 0.27, 0.35)
+theme_override_styles/normal = SubResource("InputNormal")
+theme_override_styles/focus = SubResource("InputFocus")
+placeholder_text = "再输入一次"
+max_length = 64
+secret = true
+
+[node name="Status" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 12
+text = ""
+autowrap_mode = 3
+
+[node name="Primary" type="Button" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.086, 0.082, 0.075, 1)
+theme_override_colors/font_hover_color = Color(0.086, 0.082, 0.075, 1)
+theme_override_colors/font_pressed_color = Color(0.086, 0.082, 0.075, 1)
+theme_override_colors/font_disabled_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("PrimaryNormal")
+theme_override_styles/hover = SubResource("PrimaryHover")
+theme_override_styles/pressed = SubResource("PrimaryPressed")
+theme_override_styles/disabled = SubResource("PrimaryDisabled")
+text = "进入世界"
+
+[node name="SwitchHint" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox/FormBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.50, 0.47, 1)
+theme_override_font_sizes/font_size = 12
+text = "登录后自动继续云端存档"
+autowrap_mode = 3
+
+[node name="GapBottom" type="Control" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="Footer" type="Label" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.53, 0.49, 1)
+theme_override_font_sizes/font_size = 11
+text = "云端档案 · 需要后端服务"
+
+[node name="BackBtn" type="Button" parent="Layout/HBox/Left/Dossier/Margin/VBox"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.62, 0.60, 0.56, 1)
+theme_override_colors/font_hover_color = Color(0.937, 0.914, 0.867, 1)
+theme_override_font_sizes/font_size = 12
+flat = true
+text = "← 返回开始页"
+
+[node name="Spacer" type="Control" parent="Layout/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2

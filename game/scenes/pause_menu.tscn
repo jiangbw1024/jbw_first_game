@@ -1,0 +1,193 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/pause_menu.gd" id="1_pause"]
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+content_margin_left = 42.0
+content_margin_top = 34.0
+content_margin_right = 42.0
+content_margin_bottom = 34.0
+bg_color = Color(0.045, 0.050, 0.055, 0.985)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.58, 0.48, 0.27, 0.9)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0, 0, 0, 0.55)
+shadow_size = 18
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
+layer = 100
+script = ExtResource("1_pause")
+
+[node name="Root" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Dim" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.012, 0.015, 0.76)
+mouse_filter = 0
+
+[node name="Center" type="CenterContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Panel" type="PanelContainer" parent="Root/Center"]
+custom_minimum_size = Vector2(820, 620)
+layout_mode = 2
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="VBox" type="VBoxContainer" parent="Root/Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Root/Center/Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.90, 0.82, 0.60, 1)
+theme_override_font_sizes/font_size = 34
+text = "游戏暂停"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Root/Center/Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.66, 1)
+theme_override_font_sizes/font_size = 14
+text = "单机模式 · 世界、敌人与计时已冻结"
+horizontal_alignment = 1
+
+[node name="Main" type="VBoxContainer" parent="Root/Center/Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="Buttons" type="CenterContainer" parent="Root/Center/Panel/VBox/Main"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="Root/Center/Panel/VBox/Main/Buttons"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Resume" type="Button" parent="Root/Center/Panel/VBox/Main/Buttons/VBox"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "继续游戏"
+
+[node name="GuideButton" type="Button" parent="Root/Center/Panel/VBox/Main/Buttons/VBox"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "操作指南"
+
+[node name="Leave" type="Button" parent="Root/Center/Panel/VBox/Main/Buttons/VBox"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "返回开始页"
+
+[node name="Quit" type="Button" parent="Root/Center/Panel/VBox/Main/Buttons/VBox"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "退出游戏"
+
+[node name="Footer" type="Label" parent="Root/Center/Panel/VBox/Main"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.50, 0.51, 0.52, 1)
+theme_override_font_sizes/font_size = 13
+text = "按 Esc 也可以继续"
+horizontal_alignment = 1
+
+[node name="Guide" type="VBoxContainer" parent="Root/Center/Panel/VBox"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="GuideTitle" type="Label" parent="Root/Center/Panel/VBox/Guide"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.90, 0.82, 0.60, 1)
+theme_override_font_sizes/font_size = 24
+text = "操作指南"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Center/Panel/VBox/Guide"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="GuideText" type="RichTextLabel" parent="Root/Center/Panel/VBox/Guide/Scroll"]
+custom_minimum_size = Vector2(720, 410)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/default_color = Color(0.82, 0.83, 0.84, 1)
+theme_override_font_sizes/normal_font_size = 16
+theme_override_font_sizes/bold_font_size = 16
+bbcode_enabled = true
+text = "[font_size=20][color=#d9c58e]移动[/color][/font_size]
+W / A / S / D    前 / 左 / 后 / 右移动
+鼠标移动    转动视角
+Shift（按住）    冲刺
+Space    跳跃
+
+[font_size=20][color=#d9c58e]武器与战斗[/color][/font_size]
+鼠标左键    AK47 开火 / 蝴蝶刀轻击 / 建造放置
+鼠标右键    AK47 推击 / 蝴蝶刀重击 / 建造拆除
+1    切到 AK47（建造模式下选择地基）
+3    切到蝴蝶刀
+Q    切回上一把武器
+R    AK47 换弹（持刀时无效）
+V    通用近战攻击
+F    持刀时检视蝴蝶刀
+L    开关手电筒
+H    使用急救包
+
+[font_size=20][color=#d9c58e]交互与界面[/color][/font_size]
+E    拾取、搜刮、与商店老板交易
+Tab    打开 / 关闭背包
+Enter    打开聊天；输入框中发送消息
+Esc    暂停 / 继续；界面打开时先关闭界面
+
+[font_size=20][color=#d9c58e]建造[/color][/font_size]
+B    进入 / 退出建造模式
+T    旋转待放置的建筑 90 度
+1 / 2    选择地基 / 墙（仅建造模式）
+
+[font_size=20][color=#d9c58e]菜单[/color][/font_size]
+Esc    打开菜单；再按一次回到游戏（指南里则是返回菜单）
+操作指南按钮    查看这份完整键位说明
+返回开始页按钮    存盘后结束这一局，回到「单机 / 联机」选择（点两次确认）
+退出游戏按钮    立即关闭游戏
+
+[color=#8f9296]单机打开菜单会冻结世界；联机只打开菜单、不暂停 —— 主机一暂停，同房间的人会一起卡住。[/color]"
+scroll_active = false
+
+[node name="Back" type="Button" parent="Root/Center/Panel/VBox/Guide"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "返回暂停菜单"

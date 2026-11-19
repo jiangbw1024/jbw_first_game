@@ -59,7 +59,7 @@ offset_top = -66.0
 offset_right = 560.0
 offset_bottom = -28.0
 grow_vertical = 0
-placeholder_text = "输入消息 · Enter 发送 · Esc 取消"
+placeholder_text = "输入消息"
 max_length = 200
 
 [node name="Notice" type="Label" parent="."]

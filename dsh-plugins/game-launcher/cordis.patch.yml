@@ -1,9 +1,10 @@
-# 游戏启动器：Host 端注册 /api/game-launcher/* 接口，Client 端在输入框下方加一枚按钮。
+# 游戏启动器：Host 端注册 /api/game-launcher/* 接口，Client 端在「应用托管」页面加一张游戏卡片。
 - insert:
     - id: game-launcher
       name: '@local/game-launcher'
       config:
         # 游戏项目目录（里面要有 run.sh）
         gameDir: /Users/aaaa/PycharmProjects/jbw_first_game
-        # 按钮点下去的默认模式：solo | menu | host | join | both | editor
-        mode: solo
+        # 按钮点下去的默认模式：start | solo | online | host | join | both | editor
+        # start = 开始页（单机 / 联机二选一），和终端 ./run.sh 的默认行为一致
+        mode: start

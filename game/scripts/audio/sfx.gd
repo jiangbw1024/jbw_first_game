@@ -93,6 +93,12 @@ func _build(sound: String) -> AudioStreamWAV:
 		"reload_out":   return _clack(0.16, 420.0, 0.55)
 		"reload_in":    return _clack(0.20, 300.0, 0.75)
 		"shove":        return _whoosh()
+		"chop_wood":    return _chop_wood()
+		# S12 蝴蝶刀：出刀金属声、轻/重挥砍、命中
+		"knife_draw":   return _knife_draw()
+		"knife_slash":  return _knife_whoosh(false)
+		"knife_stab":   return _knife_whoosh(true)
+		"knife_hit":    return _knife_hit()
 		"shell_drop":   return _shell()
 		"zombie_growl": return _growl(0.85, 78.0, 1.0)
 		"zombie_hit":   return _growl(0.28, 120.0, 0.7)
@@ -220,6 +226,34 @@ func _dry_fire() -> AudioStreamWAV:
 	return _encode(buf, 0.8)
 
 
+### 砍木：钝刀进木头的"咚" + 木屑的"嚓" + 一点空腔共鸣
+##
+### ★ 为什么不能直接用打墙音（_wall_hit）：
+###   打墙是"硬碰硬"，只有一记高频爆裂；砍木是"钝器陷进纤维"，
+###   所以主体必须是**低频**（180Hz 的木质共鸣），高频只做点缀。
+###   反过来会给玩家"我在敲石头"的错觉 —— 而这一下要换木材。
+func _chop_wood() -> AudioStreamWAV:
+	var dur := 0.22
+	var n := int(dur * SR)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4711
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / SR
+		var white := rng.randf_range(-1.0, 1.0)
+		# ① 木质共鸣：低频、衰减较快，是"咚"的本体
+		var body := sin(TAU * 180.0 * t) * exp(-t * 34.0) * 0.75
+		# ② 木屑：被高通滤过的噪声，极快衰减
+		lp = lerp(lp, white, 0.35)
+		var crack := (white - lp) * exp(-t / 0.012) * 0.55
+		# ③ 空腔：320Hz 短鸣，让声音"有厚度"而不是"薄薄一片"
+		var ring := sin(TAU * 320.0 * t) * exp(-t * 48.0) * 0.22
+		buf[i] = tanh((body + crack + ring) * 1.5) * 0.85
+	return _encode(buf, 0.9)
+
+
 ### 拾取：两下上行的短音 + 一点点沙沙
 ##
 ### ★ 为什么是"上行"：两个音里第二个比第一个高，听觉上天然读作"得到"；
@@ -305,6 +339,82 @@ func _whoosh() -> AudioStreamWAV:
 		var env := sin(PI * clampf(t / dur, 0.0, 1.0))
 		buf[i] = lp * env * 1.6
 	return _encode(buf, 0.7)
+
+
+### 出刀：两下金属咔嗒 + 刀柄翻转的风声
+##
+### 为什么是两下：蝴蝶刀展开不是"一下弹出来"，而是手腕甩开、
+### 刀柄撞到限位。两声之间留 0.14 秒，耳朵才能读出"翻转"这个过程。
+func _knife_draw() -> AudioStreamWAV:
+	var dur := 0.42
+	var n := int(dur * SR)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1717
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / SR
+		var s := 0.0
+
+		# 第一下：枢轴/刀柄的金属碰撞
+		s += rng.randf_range(-1.0, 1.0) * exp(-t / 0.005) * 0.62
+		s += sin(TAU * 2350.0 * t) * exp(-t * 95.0) * 0.34
+
+		# 第二下：刀柄甩到位，比第一下低一点
+		var t2 := t - 0.14
+		if t2 > 0.0:
+			s += rng.randf_range(-1.0, 1.0) * exp(-t2 / 0.006) * 0.46
+			s += sin(TAU * 1750.0 * t2) * exp(-t2 * 82.0) * 0.30
+
+		# 翻转过程的风声：带通噪声，包络先起后收
+		var k := 0.05 + 0.20 * clampf(t / dur, 0.0, 1.0)
+		lp = lerp(lp, rng.randf_range(-1.0, 1.0), k)
+		var env := sin(PI * clampf((t - 0.02) / 0.32, 0.0, 1.0))
+		s += lp * env * 0.92
+
+		buf[i] = tanh(s * 1.4) * 0.85
+	return _encode(buf, 0.90)
+
+
+### 挥砍：轻击更尖、更快；重击更低、更长。
+func _knife_whoosh(heavy: bool) -> AudioStreamWAV:
+	var dur := 0.30 if heavy else 0.20
+	var n := int(dur * SR)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 2026 if heavy else 2025
+	var lp := 0.0
+	var base := 88.0 if heavy else 150.0
+	for i in n:
+		var t := float(i) / SR
+		var u := t / dur
+		var k := (0.28 if heavy else 0.38) * (1.0 - u) + 0.025
+		lp = lerp(lp, rng.randf_range(-1.0, 1.0), k)
+		var env := sin(PI * clampf(u, 0.0, 1.0))
+		var low := sin(TAU * base * (1.0 - 0.30 * u) * t) * exp(-u * 3.0) * 0.34
+		buf[i] = tanh((lp * 1.65 + low) * 1.25) * 0.78
+	return _encode(buf, 0.80)
+
+
+### 刀命中：湿闷的肉体撞击 + 一点金属余鸣
+func _knife_hit() -> AudioStreamWAV:
+	var dur := 0.18
+	var n := int(dur * SR)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4243
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / SR
+		lp = lerp(lp, rng.randf_range(-1.0, 1.0), 0.18)
+		var body := lp * exp(-t / 0.035) * 0.95
+		var thud := sin(TAU * 105.0 * t) * exp(-t * 24.0) * 0.70
+		var ring := sin(TAU * 1900.0 * t) * exp(-t * 55.0) * 0.22
+		buf[i] = tanh((body + thud + ring) * 1.5) * 0.86
+	return _encode(buf, 0.88)
 
 
 ### 弹壳落地：高频金属短鸣

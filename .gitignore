@@ -25,4 +25,15 @@ build/
 *.log
 *.tmp
 *.bak
+cat >> .gitignore << EOF
+# Mac系统缓存文件
+.DS_Store
+
+# Godot编辑器与临时文件
+tools/Godot.app/
+tools/.parts/
+
+# 插件二进制目录
+game/addons/terrain_3d/bin/
+EOF
 

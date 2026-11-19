@@ -13,6 +13,17 @@ const PORT := 7777
 const MAX_PLAYERS := 8
 
 
+### 当前是否有会话（我是主机，或已连上主机）。
+##
+### ★ 为什么需要这个判断：
+###   房间菜单阶段（LOBBY）玩家还没点"创建/加入"，`multiplayer_peer` 是 null。
+###   这时任何 `multiplayer.get_unique_id()` / `is_server()` / `get_peers()`
+###   都会往控制台刷 "No multiplayer peer is assigned"。
+###   每帧刷一次的后果不只是吵：真正的报错会被埋掉。
+func has_session() -> bool:
+	return multiplayer.multiplayer_peer != null
+
+
 func _ready() -> void:
 	# 这三个信号是 MultiplayerAPI 的原生信号。
 	# 注意：create_client() 返回 OK 只代表"本地参数没问题"，
@@ -52,6 +63,20 @@ func join(ip: String) -> Error:
 
 func _on_connected_to_server() -> void:
 	print("[S3] 已连接到服务器 | 本机 peer_id = %d" % multiplayer.get_unique_id())
+
+
+### 释放全局 MultiplayerAPI 的 peer。
+##
+### ★ 必须先释放再换场景。
+###   ENetMultiplayerPeer 绑定的是**进程级端口**，世界场景被 free 并不会关掉它。
+###   只切场景不退会话的话，下一次 Net.host() 的 create_server(PORT) 会返回
+###   ERR_ALREADY_IN_USE，表现就是「点了创建房间，提示创建失败」。
+###   以前这段逻辑写在 AccountSession 里（叫 _close_multiplayer_peer），
+###   现在搬到 Net —— 因为"谁来关端口"应该由管端口的那个对象回答。
+func shutdown() -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	multiplayer.multiplayer_peer = null
 
 
 func _on_connection_failed() -> void:

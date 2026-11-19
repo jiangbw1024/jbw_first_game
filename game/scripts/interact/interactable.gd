@@ -22,9 +22,9 @@ func _ready() -> void:
 	collision_mask = 0
 
 
-### 抬头显示的文字。子类可覆盖成"按 E 购买装备"之类。
+### 抬头显示的动作文案。键位统一写在 game/CONTROLS.md，不放进游戏画面。
 func prompt_text(_who: Node3D) -> String:
-	return "按 E 与「%s」交互" % display_name
+	return "与「%s」交互" % display_name
 
 
 ### 是否允许此刻交互（比如"钱不够"就可以在这里拒绝，连提示都不给）

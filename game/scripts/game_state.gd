@@ -13,7 +13,7 @@ var ui_captures_input: bool:
 	get:
 		return not _claims.is_empty()
 
-## 谁在抢输入：`"chat"` / `"shop"` …
+## 谁在抢输入：`"chat"` / `"shop"` / `"bag"` / `"pause"` …
 ## 为什么不是裸 bool？因为聊天和商店可能**同时开着**。
 ## 裸 bool 下，关掉聊天会把开关无条件写成 false，
 ## 于是商店还开着、角色却能动 —— 这种"关一个 UI 把另一个 UI 放开"的 bug
@@ -22,6 +22,10 @@ var _claims: Dictionary = {}
 
 ## 建造模式是否开启。交互探测看到它为真就让路（否则瞄着墙想放砖时会弹出商店提示）
 var build_active := false
+
+## 建造模式当前选中的件（S12）。由 build.gd 写，图鉴 UI 读它来高亮。
+## 为什么不放一个信号：图鉴跟着 build_active 一起刷新，读变量比多一条信号更省。
+var build_kind := ""
 
 ## 屏幕下方的交互提示（准心正下方）。空字符串表示不显示。
 signal prompt_changed(text: String)
@@ -84,6 +88,17 @@ func claim_ui(who: String) -> void:
 
 func release_ui(who: String) -> void:
 	_claims.erase(who)
+
+
+### 离场兜底：切场景 / 退出会话时一次性清空所有输入锁。
+##
+### 为什么不逐个 release：
+##   锁是 UI 自己加的（聊天、商店、背包、暂停、死亡遮罩），
+##   离场那一刻我们并不知道哪些 UI 还开着 —— 尤其"死亡遮罩"这种
+##   不会自己关的。漏一个，下一局进游戏角色就不动了，
+##   而且现场已经没有任何线索能追到是谁锁的。
+func clear_ui() -> void:
+	_claims.clear()
 
 
 func set_prompt(text: String) -> void:

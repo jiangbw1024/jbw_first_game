@@ -29,7 +29,9 @@ enum Slot { PRIMARY, KNIFE }
 enum SwitchPhase { IDLE, HOLSTER, DRAW }
 
 const SLOT_HOLSTER_TIME := 0.30
-const SLOT_DRAW_TIME := 0.45
+const SLOT_DRAW_KNIFE_TIME := 0.45
+## 切回 AK 要先抬枪并拉栓；这段时间内 can_attack() 必须保持 false。
+const SLOT_DRAW_PRIMARY_TIME := 0.55
 const KNIFE_MOVE_MULT := 1.12
 
 const SHOVE_RANGE := 2.0
@@ -61,6 +63,7 @@ var _shove_cd := 0.0
 var _melee_cd := 0.0
 var _was_reloading := false
 var _switch_left := 0.0
+var _draw_time := SLOT_DRAW_KNIFE_TIME
 var _switch_target := Slot.PRIMARY
 var _knife_pending_heavy := false
 var _knife_pending_origin := Vector3.ZERO
@@ -102,8 +105,18 @@ func _process(delta: float) -> void:
 		_emit_ammo()
 	_was_reloading = weapon.reloading
 
-	if not _player.is_local() or GameState.ui_captures_input:
+	# ★ 建造模式也要闭嘴。不加这一条，左键会同时"放一块砖"和"打一发子弹"，
+	#   枪声响起、弹壳弹出、准心扩散 —— 而玩家只是想把墙放下去。
+	#   这和 ui_captures_input 是同一类问题：**另一个系统占用了这个键**。
+	if not _player.is_local() or GameState.ui_captures_input or GameState.build_active:
 		_trigger_down = false
+		return
+
+	# 建造模式接管左右键和 1/2：否则放地基会顺手开枪，按 1 选地基
+	# 还会同时切回 AK。这里让整段战斗输入让路，退出建造后自动恢复。
+	if GameState.build_active:
+		_trigger_down = false
+		GameState.crosshair_spread = 0.0
 		return
 
 	if Input.is_action_just_pressed("slot_primary"):
@@ -228,7 +241,7 @@ func switch_progress() -> float:
 		return 1.0
 	if switch_phase == SwitchPhase.HOLSTER:
 		return 0.0
-	return 1.0 - _switch_left / maxf(0.01, SLOT_DRAW_TIME)
+	return 1.0 - _switch_left / maxf(0.01, _draw_time)
 
 
 func slot_label(slot := current_slot) -> String:
@@ -246,7 +259,10 @@ func _tick_switch(delta: float) -> void:
 	if switch_phase == SwitchPhase.HOLSTER:
 		current_slot = _switch_target
 		switch_phase = SwitchPhase.DRAW
-		_switch_left = SLOT_DRAW_TIME
+		_draw_time = (SLOT_DRAW_KNIFE_TIME
+			if current_slot == Slot.KNIFE
+			else SLOT_DRAW_PRIMARY_TIME)
+		_switch_left = _draw_time
 		_emit_slot()
 	else:
 		switch_phase = SwitchPhase.IDLE
@@ -541,7 +557,8 @@ func _apply_knife_damage(_origin: Vector3, dir: Vector3, heavy: bool) -> void:
 	var any := false
 
 	# 挥空也有风声；命中再叠肉体声，玩家能靠听觉分辨"擦边"和"砍中"。
-	Sfx.play("shove", _player.global_position + Vector3.UP, -3.0, 1.30 if heavy else 1.55, 0.10)
+	Sfx.play("knife_stab" if heavy else "knife_slash",
+		_player.global_position + Vector3.UP, -3.0, 1.0, 0.08)
 
 	for body in _bodies_in_cone(hit_origin, forward, reach, half_angle):
 		if body == null or not body.has_method("take_hit"):
@@ -554,7 +571,7 @@ func _apply_knife_damage(_origin: Vector3, dir: Vector3, heavy: bool) -> void:
 		var hit_pos: Vector3 = body.global_position + Vector3.UP * 1.1
 		if _fx != null and is_instance_valid(_fx):
 			_fx.spawn_impact(hit_pos, forward, true, backstab)
-		Sfx.play("hit_flesh", hit_pos, -2.0, 1.15 if backstab else 1.0, 0.08)
+		Sfx.play("knife_hit", hit_pos, -2.0, 1.12 if backstab else 1.0, 0.08)
 
 	if any:
 		hit_confirmed.emit(false)

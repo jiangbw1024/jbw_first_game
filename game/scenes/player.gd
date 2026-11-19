@@ -35,6 +35,9 @@ const RESPAWN_DELAY := 3.0
 @onready var hand: Node3D = $HandItem
 
 var _pitch := 0.0
+## 视图当前显示的槽位。Combat 在切枪完成时会再发一次同槽位信号，
+## 不能把第二次信号也当成"重新拔刀"。
+var _view_slot := Combat.Slot.PRIMARY
 ## 后坐力造成的额外抬头（弧度）。它和 _pitch 分开存，才能"顶上去再自己落回来"
 var _recoil := 0.0
 ## 震屏强度 0..1.2，每帧衰减
@@ -62,7 +65,7 @@ var _jump_queued := false
 
 
 func _ready() -> void:
-	label.text = "玩家 %s" % name
+	_update_name_label()
 	# 丧尸靠这个 group 找目标。用 group 而不是写死路径，
 	# 节点层级一变（比如以后把玩家放进 Players 的子容器）也不会断
 	add_to_group("players")
@@ -85,6 +88,7 @@ func _ready() -> void:
 		combat.slot_changed.connect(_on_slot_changed)
 		combat.switch_started.connect(_on_switch_started)
 		combat.knife_swung.connect(_on_knife_swung)
+		view.bolt_racked.connect(_on_bolt_racked)
 		_on_ammo_changed(combat.weapon.ammo, combat.weapon.reserve, false)
 		_on_slot_changed(combat.current_slot, combat.slot_label())
 		GameState.player_health = hp
@@ -98,6 +102,105 @@ func peer_id() -> int:
 
 func is_local() -> bool:
 	return peer_id() == multiplayer.get_unique_id()
+
+
+# ------------------------------------------------------------
+# 身份（S13）
+# ------------------------------------------------------------
+## ★ 为什么玩家要有 account_id，而不是"节点名 = 我是谁"：
+##   节点名是 peer_id，它是**一次连接**的编号：换个人开房、换个加入顺序，
+##   同一个人的编号就会变。用它当身份键，存档就会跟错人。
+##   账号 id 来自后端 JWT，跨局稳定 —— 这才是"我"。
+##
+##   现在 peer_id 仍然决定"哪个节点归我控制"（同步、输入、RPC 寻址都靠它），
+##   但它不再被当成身份。这两件事必须分开。
+var account_id := 0
+var account_name := ""
+
+
+### 服务器写入身份并广播给所有端。
+##   全端都要知道"这个角色是谁"，否则别人头上没有名字。
+##
+## ★ 名字不能叫 `set_identity`：Node3D 已经有一个同名虚函数（Object 的通用 setter），
+##   重载它会被引擎判为"签名不匹配"，而且永远不会被调用。
+##   GDScript 里踩这个坑只有一句看不懂的报错：
+##     "The method set_identity() overrides a method from native class Node3D"
+func apply_identity(acc_id: int, acc_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	_identity_rpc.rpc(acc_id, acc_name)
+
+
+@rpc("authority", "call_local", "reliable")
+func _identity_rpc(acc_id: int, acc_name: String) -> void:
+	account_id = acc_id
+	account_name = acc_name
+	_update_name_label()
+
+
+### 客户端声明"我是谁"。
+##
+### ★ 只能声明自己那个节点：`get_remote_sender_id() != peer_id()` 就拒绝。
+##   不校验的话，任何人一次 RPC 就能把自己标成别人的账号，
+##   把别人的掉落物、结算、名字全抢走。
+##
+### ★ 这里没有验签，值可以是假的。这是有意的取舍：
+##   存档读写走的是**客户端自己带着 JWT 找后端**，后端只认 token。
+##   所以谎报 account_id 只能骗到"头顶显示的名字"，骗不到别人的存档。
+##   要做真验证，就得让主机拿客户端 token 去后端换身份 —— 那是联机存档
+##   走向服务器权威时才需要的一步，现在做等于把简单问题复杂化。
+@rpc("any_peer", "call_remote", "reliable")
+func _request_identity(acc_id: int, acc_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id():
+		return
+	# 名字纯显示用，截断长度，避免有人用超长字符串把别人的 HUD 撑爆
+	apply_identity(acc_id, acc_name.strip_edges().left(20))
+
+
+func _update_name_label() -> void:
+	if label == null:
+		return
+	label.text = account_name if not account_name.is_empty() else "玩家 %s" % name
+
+
+### 联机开局：客户端把自己的存档起点交给房主。
+##
+### ★ 为什么必须绕这一圈：
+##   联机里血量、背包、弹药都是**服务器权威**的（`_inv_rpc` 从服务器往客户端推）。
+##   客户端自己 set 一下，下一帧就被覆盖；而且服务器算伤害时用的还是旧值。
+##   所以"读云端存档"这件事最终必须落到**服务器那一份状态**上。
+##
+### ★ 校验只做范围钳制，不做价值判断：
+##   存档在玩家自己账号下，他改自己的存档只影响自己；
+##   而房主本来就有能力改一切。真要防，得让服务器去后端读存档 —— 
+##   那属于"服务器权威存档"，是下一步的事。
+@rpc("any_peer", "call_remote", "reliable")
+func _request_adopt_state(state: Dictionary) -> void:
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id():
+		return
+	_adopt_state(state)
+
+
+func _adopt_state(state: Dictionary) -> void:
+	hp = clampf(float(state.get("hp", MAX_HP)), 1.0, MAX_HP)
+
+	var inv: Variant = state.get("inventory", [])
+	if inv is Array:
+		inventory.load_state(inv)
+
+	var weapon_data: Variant = state.get("weapon", {})
+	if weapon_data is Dictionary and combat != null and combat.weapon != null:
+		var w: Dictionary = weapon_data
+		combat.weapon.ammo = clampi(int(w.get("ammo", combat.weapon.ammo)), 0, 999)
+		combat.weapon.reserve = clampi(int(w.get("reserve", combat.weapon.reserve)), 0, 999)
+
+	_push_inventory()
+	# amount = 0 表示"血量被改写"而不是"挨打"：不会闪红边（S11 修过的那个坑）
+	_damage_rpc.rpc(hp, 0.0, global_position)
 
 
 # ------------------------------------------------------------
@@ -226,26 +329,47 @@ func _on_ammo_changed(mag: int, reserve: int, reloading: bool) -> void:
 
 func _on_slot_changed(slot: int, label: String) -> void:
 	GameState.weapon_changed.emit(slot, label)
+	var entered_knife := slot == Combat.Slot.KNIFE and _view_slot != Combat.Slot.KNIFE
+	var entered_primary := slot == Combat.Slot.PRIMARY and _view_slot != Combat.Slot.PRIMARY
+	_view_slot = slot
 	if view != null:
 		view.visible = slot == Combat.Slot.PRIMARY
+		if entered_primary and view.has_method("play_equip"):
+			view.call("play_equip", Combat.SLOT_DRAW_PRIMARY_TIME)
+		elif (slot == Combat.Slot.PRIMARY
+				and not combat.is_switching()
+				and view.has_method("cancel_transition")):
+			# 切枪被取消时，枪可能还停在收枪/抬枪过渡中。
+			view.call("cancel_transition")
 	if knife_view != null:
 		knife_view.visible = slot == Combat.Slot.KNIFE
-		if slot == Combat.Slot.KNIFE and knife_view.has_method("play_draw"):
+		if entered_knife and knife_view.has_method("play_draw"):
 			knife_view.call("play_draw")
+			Sfx.play_ui("knife_draw", -4.0)
 
 
 func _on_switch_started(target_slot: int) -> void:
-	# 收刀阶段先把刀压低；拉刀阶段由 slot_changed 在 0.30s 后触发。
-	if (target_slot == Combat.Slot.PRIMARY
+	# 收枪/收刀阶段先播放离场动作；拉刀阶段由 slot_changed 在 0.30s 后触发。
+	if (target_slot == Combat.Slot.KNIFE
+			and view != null
+			and view.visible
+			and view.has_method("play_holster")):
+		view.call("play_holster", Combat.SLOT_HOLSTER_TIME)
+	elif (target_slot == Combat.Slot.PRIMARY
 			and knife_view != null
 			and knife_view.visible
 			and knife_view.has_method("play_holster")):
 		knife_view.call("play_holster")
+		Sfx.play_ui("knife_draw", -9.0, 0.82)
 
 
 func _on_knife_swung(heavy: bool) -> void:
 	if knife_view != null and knife_view.has_method("play_attack"):
 		knife_view.call("play_attack", heavy)
+
+
+func _on_bolt_racked() -> void:
+	Sfx.play_ui("reload_in", -3.0, 1.08)
 
 
 # ------------------------------------------------------------
@@ -436,6 +560,49 @@ func add_item(item_id: String, count: int) -> int:
 	if got > 0:
 		_push_inventory()
 	return got
+
+
+# ------------------------------------------------------------
+# 消耗材料（S12 建造）
+# ------------------------------------------------------------
+### 够不够造这个？cost 是 {item_id: 数量}
+##
+## 只读、不改状态，所以客户端也能调它上色（"红色的预览"就是靠这个判断）。
+## ★ 但同时它也必须被服务器再调一次 —— 客户端上色只是提示，
+##   真正扣材料必须由服务器裁决，否则改客户端就能免费建造。
+func can_afford(cost: Dictionary) -> bool:
+	for id in cost:
+		if inventory.count_of(String(id)) < int(cost[id]):
+			return false
+	return true
+
+
+### 扣材料。返回是否真的扣掉了。
+##
+## ★ 必须先整体校验、再统一扣。反过来写（边扣边校验）会出现
+##   "木材扣了 2，废金属不够，于是废金属没扣"—— 材料凭空消失一半，
+##   而这种 bug 玩家只会看到"我明明有材料却造不出东西"。
+func spend(cost: Dictionary) -> bool:
+	if not multiplayer.is_server():
+		return false
+	if not can_afford(cost):
+		return false
+	for id in cost:
+		inventory.take(String(id), int(cost[id]))
+	_push_inventory()
+	return true
+
+
+### 返还材料（拆除时）。装不下就丢掉 —— 不因为"背包满"阻止拆墙。
+func refund(items: Dictionary) -> void:
+	if not multiplayer.is_server() or items.is_empty():
+		return
+	var any := false
+	for id in items:
+		if inventory.add(String(id), int(items[id])) > 0:
+			any = true
+	if any:
+		_push_inventory()
 
 
 ### 把背包状态推给"这个玩家的客户端"。

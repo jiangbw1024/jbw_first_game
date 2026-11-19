@@ -14,9 +14,13 @@ const STEP_TOL := 0.30      # 单步允许的最大高差（玩家台阶辅助�
 
 func run(test_name: String) -> void:
 	_tree = get_tree()
+	# 暂停测试会让整棵树暂停；探针自己必须继续运行，才能解除暂停。
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	match test_name:
 		"input":
 			_test_input()
+		"pause":
+			_test_pause()
 		"slots":
 			_test_slots()
 		"knife":
@@ -43,10 +47,34 @@ func run(test_name: String) -> void:
 			_test_combat()
 		"loot":
 			_test_loot()
+		"build":
+			_test_build()
+		"launch":
+			_test_launch()
+		"profile":
+			_test_profile()
+		"logout":
+			_test_logout()
+		"logoutlive":
+			_test_logout_live()
+		"lobby":
+			_test_lobby()
+		"buildshot":
+			_build_shot()
 		"shot":
 			_shot()
 		"knifeshot":
 			_knifeshot()
+		"akshot":
+			_akshot()
+		"pauseshot":
+			_pauseshot()
+		"startshot":
+			_startshot()
+		"startui":
+			_test_startui()
+		"pauseonlineshot":
+			_pauseonlineshot()
 		_:
 			print("[TEST] 未知测试：%s" % test_name)
 			_finish(true)
@@ -101,6 +129,152 @@ func _test_input() -> void:
 
 
 # ------------------------------------------------------------
+# 游戏内菜单：单机能暂停；联机能开但绝不暂停；出口永远在
+# ------------------------------------------------------------
+func _test_pause() -> void:
+	var world := get_parent()
+	var pause_menu = world.get_node_or_null("PauseMenu")
+	if pause_menu == null:
+		print("[TEST] 找不到 PauseMenu")
+		_finish(false)
+		return
+
+	# 客户端连接是异步的：会话还没建起来就测，测的是"还没有出口"的中间态，
+	# 结论没有意义。最多等 3 秒（180 帧）。
+	if not multiplayer.is_server():
+		for i in 180:
+			if Net.has_session() and not multiplayer.get_peers().is_empty():
+				break
+			await _tree.process_frame
+
+	var ok := true
+
+	var resume_btn: Button = pause_menu.get_node(
+		"Root/Center/Panel/VBox/Main/Buttons/VBox/Resume")
+	var guide_btn: Button = pause_menu.get_node(
+		"Root/Center/Panel/VBox/Main/Buttons/VBox/GuideButton")
+	var leave_btn: Button = pause_menu.get_node(
+		"Root/Center/Panel/VBox/Main/Buttons/VBox/Leave")
+	var quit_btn: Button = pause_menu.get_node(
+		"Root/Center/Panel/VBox/Main/Buttons/VBox/Quit")
+	var title: Label = pause_menu.get_node("Root/Center/Panel/VBox/Title")
+	var subtitle: Label = pause_menu.get_node("Root/Center/Panel/VBox/Subtitle")
+
+	# ---- 1. 按当前真实角色断言 ----
+	#     能冻结就必须真的冻结；不能冻结（客户端 / 有客人）就必须一点不冻。
+	#     这条在主机、客户端两种进程里跑出来的期望值不同，所以是"算"出来的，
+	#     不是写死的 —— 否则这个用例只能在单机下有意义。
+	var can_freeze: bool = bool(pause_menu.get("_can_freeze"))
+	print("[TEST] 角色=%s 可冻结=%s（只有单机 / 主机独处才为 true）" % [
+		"主机" if multiplayer.is_server() else "客户端", str(can_freeze)])
+
+	var opened: bool = pause_menu.call("open_pause")
+	var paused := _tree.paused
+	var menu_visible: bool = pause_menu.call("is_open")
+	print("[TEST] 打开菜单：打开=%s 暂停中=%s 可见=%s（期望 true/%s/true）" % [
+		str(opened), str(paused), str(menu_visible), str(can_freeze)])
+	if not opened or not menu_visible:
+		ok = false
+	if paused != can_freeze:
+		print("[TEST] 冻结状态与角色不符：paused=%s 可冻结=%s" % [str(paused), str(can_freeze)])
+		ok = false
+
+	var want_title := "游戏暂停" if can_freeze else "游戏菜单"
+	var want_resume := "继续游戏" if can_freeze else "回到游戏"
+	var want_sub := "冻结" if can_freeze else "不会暂停"
+	print("[TEST] 文案：标题=\"%s\" 主按钮=\"%s\"（期望 %s / %s）" % [
+		title.text, resume_btn.text, want_title, want_resume])
+	if title.text != want_title or resume_btn.text != want_resume:
+		ok = false
+	if subtitle.text.find(want_sub) < 0:
+		print("[TEST] 副标题没说明当前语义：%s" % subtitle.text)
+		ok = false
+
+	pause_menu.call("show_guide")
+	var guide: Control = pause_menu.get_node("Root/Center/Panel/VBox/Guide")
+	var main: Control = pause_menu.get_node("Root/Center/Panel/VBox/Main")
+	var guide_text: RichTextLabel = pause_menu.get_node(
+		"Root/Center/Panel/VBox/Guide/Scroll/GuideText")
+	var guide_ok := guide.visible and not main.visible
+	for token in ["W / A / S / D", "鼠标左键", "Esc", "返回开始页"]:
+		if guide_text.text.find(token) < 0:
+			print("[TEST] 操作指南缺少=%s" % token)
+			guide_ok = false
+	print("[TEST] 操作指南显示=%s 内容完整=%s" % [str(guide.visible), str(guide_ok)])
+	if not guide_ok:
+		ok = false
+
+	pause_menu.call("show_main")
+	var buttons_ok := (resume_btn.text == want_resume
+		and guide_btn.text == "操作指南"
+		and leave_btn.text == "返回开始页"
+		and quit_btn.text == "退出游戏")
+	print("[TEST] 菜单按钮=%s（主按钮 / 指南 / 返回开始页 / 退出游戏）" % str(buttons_ok))
+	if not buttons_ok:
+		ok = false
+
+	pause_menu.call("resume_game")
+	var resumed := not _tree.paused and not bool(pause_menu.call("is_open"))
+	print("[TEST] 收起菜单：暂停解除=%s" % str(resumed))
+	if not resumed:
+		ok = false
+
+	# ---- 2. 反向语义：另一个开关必须独立生效 ----
+	#     主机上模拟"有客人"，客户端上模拟"一个人玩"。
+	#     这一步是在验证 open_pause 真的读了 _can_freeze，而不是碰巧对。
+	pause_menu.call("set_pausable", not can_freeze)
+	var flip := not can_freeze
+	var opened2: bool = pause_menu.call("open_pause")
+	var paused2 := _tree.paused
+	var want_title2 := "游戏暂停" if flip else "游戏菜单"
+	var want_resume2 := "继续游戏" if flip else "回到游戏"
+	print("[TEST] 反向语义（可冻结=%s）：打开=%s 暂停中=%s 标题=\"%s\" 主按钮=\"%s\"" % [
+		str(flip), str(opened2), str(paused2), title.text, resume_btn.text])
+	if not opened2 or paused2 != flip:
+		ok = false
+	if title.text != want_title2 or resume_btn.text != want_resume2:
+		ok = false
+
+	# ---- 3. 返回开始页要点两次：第一次只进入确认态，不能直接切场景 ----
+	#     联机里这一下等于关服务器，误触的代价是别人被踢出去。
+	pause_menu.call("request_leave")
+	var scene_now: String = _tree.current_scene.scene_file_path if _tree.current_scene != null else ""
+	print("[TEST] 离开需确认：按钮=\"%s\" 场景=%s（期望 含「确认」/ 仍在 world.tscn）" % [
+		leave_btn.text, scene_now])
+	if leave_btn.text.find("确认") < 0:
+		ok = false
+	if scene_now != "res://scenes/world.tscn":
+		ok = false
+
+	# ---- 4. 收起菜单必须解冻，并且不留下输入锁 ----
+	pause_menu.call("resume_game")
+	var clean := (not _tree.paused and not bool(pause_menu.call("is_open"))
+		and not GameState.ui_captures_input and leave_btn.text == "返回开始页")
+	print("[TEST] 收起菜单：暂停=%s 可见=%s 输入锁=%s 按钮=\"%s\"（期望全为干净状态）" % [
+		str(_tree.paused), str(bool(pause_menu.call("is_open"))),
+		str(GameState.ui_captures_input), leave_btn.text])
+	if not clean:
+		ok = false
+
+	# 还原成这个进程真实的状态，避免影响后面的用例
+	pause_menu.call("set_pausable", can_freeze)
+
+	# ---- 5. 重算可用性：会话建立后必须把菜单重新打开 ----
+	#     这就是"从大厅点创建房间、一个人玩、Esc 没反应"那条 bug 的守门人：
+	#     以前 _refresh_pause_availability 只在 peer 连入/断开时被调用，
+	#     单独的会话建立过程没有人算这一次。
+	pause_menu.call("set_enabled", false)
+	world.call("_refresh_pause_availability")
+	var reenabled := bool(pause_menu.get("enabled")) and Net.has_session()
+	print("[TEST] 有会话时重算菜单可用性：菜单可开=%s 有会话=%s（期望 true/true）" % [
+		str(bool(pause_menu.get("enabled"))), str(Net.has_session())])
+	if not reenabled:
+		ok = false
+
+	_finish(ok)
+
+
+# ------------------------------------------------------------
 # 武器槽：1/3/Q 的切换顺序、拉刀锁、取消、换弹打断
 # ------------------------------------------------------------
 func _test_slots() -> void:
@@ -146,13 +320,35 @@ func _test_slots() -> void:
 		ok = false
 	if c.last_slot != Combat.Slot.PRIMARY:
 		ok = false
+	# 拉刀只允许播一次：切换完成时 Combat 会再发一次同槽位信号，
+	# 如果视图无条件重播，0.86s 时动画应该已经结束而不是仍在播放。
+	var knife_view = player.get("knife_view")
+	var draw_once: bool = (knife_view != null
+		and knife_view.visible
+		and not knife_view.is_busy())
+	print("[TEST] 拉刀只播一次=%s（期望 true）" % str(draw_once))
+	if not draw_once:
+		ok = false
 
 	# Q：回到上一把（AK47）
 	c.switch_to(c.last_slot)
-	await _tree.create_timer(0.80).timeout
-	print("[TEST] Q 切回：当前=%s last=%s（期望 AK47 / 蝴蝶刀）" % [
-		c.slot_label(), c.slot_label(c.last_slot)])
+	await _tree.create_timer(0.36).timeout
+	var weapon_view = player.get("view")
+	var bolting: bool = weapon_view != null and weapon_view.is_equipping()
+	var fire_locked := not c._try_fire()
+	print("[TEST] AK 抬枪拉栓：当前=%s 切换中=%s 拉栓动画=%s 开火锁=%s" % [
+		c.slot_label(), str(c.is_switching()), str(bolting), str(fire_locked)])
+	if c.current_slot != Combat.Slot.PRIMARY or not c.is_switching():
+		ok = false
+	if not bolting or not fire_locked or c.can_attack():
+		ok = false
+
+	await _tree.create_timer(0.60).timeout
+	print("[TEST] 0.96s：AK 就绪=%s 动画结束=%s" % [
+		str(not c.is_switching()), str(not weapon_view.is_busy())])
 	if c.current_slot != Combat.Slot.PRIMARY or c.is_switching():
+		ok = false
+	if weapon_view == null or weapon_view.is_busy():
 		ok = false
 	if c.last_slot != Combat.Slot.KNIFE:
 		ok = false
@@ -172,16 +368,23 @@ func _test_slots() -> void:
 	if c.current_slot != Combat.Slot.KNIFE or c.is_switching():
 		ok = false
 	c.switch_to(Combat.Slot.PRIMARY)
-	await _tree.create_timer(0.80).timeout
+	await _tree.create_timer(0.96).timeout
 
 	# 换弹中切枪：换弹必须被打断
 	c.weapon.ammo = 1
 	c.reload()
 	var reload_started := c.weapon.reloading
+	await _tree.create_timer(0.40).timeout
+	var gun_pos_before: Vector3 = weapon_view.position
 	c.switch_to(Combat.Slot.KNIFE)
-	print("[TEST] 换弹中切枪：开始=%s 切后仍在换弹=%s" % [
-		str(reload_started), str(c.weapon.reloading)])
+	await _tree.process_frame
+	var holstering: bool = weapon_view.is_holstering()
+	var pose_jump: float = gun_pos_before.distance_to(weapon_view.position)
+	print("[TEST] 换弹中切枪：开始=%s 仍在换弹=%s 收枪动画=%s 姿态跳变=%.4f" % [
+		str(reload_started), str(c.weapon.reloading), str(holstering), pose_jump])
 	if not reload_started or c.weapon.reloading:
+		ok = false
+	if not holstering or pose_jump > 0.03:
 		ok = false
 
 	_finish(ok)
@@ -306,6 +509,13 @@ func _spawn_knife_target(parent: Node3D, pos: Vector3, yaw: float,
 # 刀视图截图：待机 / 检视 / 轻击
 # ------------------------------------------------------------
 func _knifeshot() -> void:
+	# 截图期间不接受 Esc 暂停，否则窗口焦点产生的事件会把截图切成暂停菜单。
+	var pause_menu = get_parent().get_node_or_null("PauseMenu")
+	if pause_menu != null:
+		if bool(pause_menu.call("is_open")):
+			pause_menu.call("resume_game")
+		pause_menu.call("set_enabled", false)
+
 	for i in 30:
 		await _tree.process_frame
 
@@ -372,6 +582,227 @@ func _knifeshot() -> void:
 	print("[TEST] 轻击截图 /tmp/knife_slash.png err=%d" % err)
 
 	_finish(err == OK)
+
+
+# ------------------------------------------------------------
+# AK 切枪截图：拉栓中段 / 换弹中途收枪
+# ------------------------------------------------------------
+func _akshot() -> void:
+	var pause_menu = get_parent().get_node_or_null("PauseMenu")
+	if pause_menu != null:
+		if bool(pause_menu.call("is_open")):
+			pause_menu.call("resume_game")
+		pause_menu.call("set_enabled", false)
+
+	for i in 30:
+		await _tree.process_frame
+
+	var player := get_parent().get_node_or_null("Players/1")
+	if player == null:
+		print("[TEST] 玩家没生成")
+		_finish(false)
+		return
+
+	player.set("_pitch", 0.0)
+	var head := player.get_node_or_null("Head")
+	if head != null:
+		head.rotation.x = 0.0
+	player.rotation.y = 0.0
+
+	var c: Combat = player.combat
+	c.switch_to(Combat.Slot.KNIFE)
+	await _tree.create_timer(0.85).timeout
+	c.switch_to(Combat.Slot.PRIMARY)
+	await _tree.create_timer(0.70).timeout
+	await RenderingServer.frame_post_draw
+	var img := _tree.root.get_viewport().get_texture().get_image()
+	var bolt_err := img.save_png("/tmp/ak_bolt.png")
+
+	await _tree.create_timer(0.35).timeout
+	c.weapon.ammo = 1
+	c.reload()
+	await _tree.create_timer(0.45).timeout
+	c.switch_to(Combat.Slot.KNIFE)
+	await _tree.create_timer(0.15).timeout
+	await RenderingServer.frame_post_draw
+	img = _tree.root.get_viewport().get_texture().get_image()
+	var holster_err := img.save_png("/tmp/ak_holster_reload.png")
+
+	print("[TEST] AK 截图 bolt_err=%d holster_err=%d" % [bolt_err, holster_err])
+	_finish(bolt_err == OK and holster_err == OK)
+
+
+# ------------------------------------------------------------
+# 暂停菜单截图：主菜单 / 操作指南
+# ------------------------------------------------------------
+### 开始页的结构与接线（不用渲染，headless 也能跑）。
+##
+### 为什么要专门测这个：**"看得见但点不动"是这一屏最容易出的 bug。**
+### 按钮存在不等于接上了信号 —— S13 那次单机退出无效，就是按钮好好的、
+### 回调却提前 return。所以这里既查节点，也查 `pressed` 有没有真的连上去。
+func _test_startui() -> void:
+	# 自检启动时 Launch.direct 为真，开始页会一进来就跳走。
+	# 这里只想要它"停住"，所以先作废这次启动意图。
+	Launch.end_intent()
+
+	var page: Control = load("res://scenes/start/start.tscn").instantiate()
+	add_child(page)
+	await _tree.process_frame
+
+	var ok := true
+	var solo: Button = page.get_node_or_null("Layout/Row/Left/SoloBtn")
+	var online: Button = page.get_node_or_null("Layout/Row/Left/OnlineBtn")
+	var quit: Button = page.get_node_or_null("Layout/Row/Left/QuitBtn")
+	var local_value: Label = page.get_node_or_null(
+		"Layout/Row/Right/Card/Margin/VBox/LocalRow/LocalValue")
+	var account_value: Label = page.get_node_or_null(
+		"Layout/Row/Right/Card/Margin/VBox/AccountRow/AccountValue")
+
+	if solo == null or online == null or quit == null:
+		print("[TEST] 开始页缺少按钮节点")
+		page.queue_free()
+		_finish(false)
+		return
+
+	print("[TEST] 开始页按钮：单人=\"%s\" 联机=\"%s\" 退出=\"%s\"" % [
+		solo.text, online.text, quit.text])
+	if solo.text != "单人进入" or online.text != "联机进入" or quit.text != "退出游戏":
+		ok = false
+
+	# 退出按钮必须真的接了信号 —— 这次修的就是"有按钮没出口"。
+	var wired := not solo.pressed.get_connections().is_empty() \
+		and not online.pressed.get_connections().is_empty() \
+		and not quit.pressed.get_connections().is_empty()
+	print("[TEST] 三个按钮都已接线=%s（期望 true）" % str(wired))
+	if not wired:
+		ok = false
+
+	# 档案卡必须有真实读数：没有存档要写"暂无"，不能留占位符。
+	print("[TEST] 档案卡：本地=\"%s\" 账号=\"%s\"" % [
+		local_value.text if local_value != null else "-",
+		account_value.text if account_value != null else "-"])
+	if local_value == null or local_value.text.is_empty() or local_value.text == "—":
+		ok = false
+
+	# 主次分明：单人必须是实心（有底色），联机是描边（底色几乎透明）。
+	# 两个一样的按钮等于没有主次，这一条守着视觉层级。
+	var solo_style := solo.get_theme_stylebox("normal") as StyleBoxFlat
+	var online_style := online.get_theme_stylebox("normal") as StyleBoxFlat
+	if solo_style == null or online_style == null:
+		ok = false
+	else:
+		var contrast := solo_style.bg_color.a - online_style.bg_color.a
+		print("[TEST] 按钮层级：单人底色 a=%.2f 联机底色 a=%.2f（差值应 > 0.5）" % [
+			solo_style.bg_color.a, online_style.bg_color.a])
+		if contrast <= 0.5:
+			ok = false
+
+	page.queue_free()
+	_finish(ok)
+
+
+### 开始页截图：UI 改动要能"看"见，不然只能靠猜。
+##
+### 探针原本挂在世界节点下，而这里要切到开始页 —— 会把它一起 free。
+### 所以先把探针搬到 root（不随场景释放），再切场景、等布局稳定、截图。
+##  用 `--solo --selftest startshot` 跑（不要加 --headless，无头没有渲染目标）。
+func _startshot() -> void:
+	for i in 6:
+		await _tree.process_frame
+
+	var world := get_parent()
+	world.remove_child(self)
+	_tree.root.add_child(self)
+
+	# --solo 会把 Launch.direct 置真，开始页会一帧不停又跳回世界。
+	# 截图要的是"停在这一屏"，所以先把这次启动意图作废。
+	Launch.end_intent()
+	_tree.change_scene_to_file("res://scenes/start/start.tscn")
+
+	for i in 30:
+		await _tree.process_frame
+	await RenderingServer.frame_post_draw
+	var img := _tree.root.get_viewport().get_texture().get_image()
+	var err := img.save_png("/tmp/start_page.png")
+	print("[TEST] 开始页截图=%s 场景=%s" % [
+		error_string(err), _tree.current_scene.scene_file_path if _tree.current_scene != null else "-"])
+	_finish(err == OK)
+
+
+func _pauseshot() -> void:
+	var world := get_parent()
+	if not bool(world.call("is_solo")):
+		print("[TEST] 暂停截图必须用 --solo 运行")
+		_finish(false)
+		return
+
+	var pause_menu = world.get_node_or_null("PauseMenu")
+	if pause_menu == null:
+		print("[TEST] 找不到 PauseMenu")
+		_finish(false)
+		return
+
+	for i in 20:
+		await _tree.process_frame
+	if not bool(pause_menu.call("open_pause")):
+		print("[TEST] 暂停菜单打开失败")
+		_finish(false)
+		return
+
+	for i in 4:
+		await _tree.process_frame
+	await RenderingServer.frame_post_draw
+	var img := _tree.root.get_viewport().get_texture().get_image()
+	var err := img.save_png("/tmp/pause_main.png")
+
+	pause_menu.call("show_guide")
+	for i in 4:
+		await _tree.process_frame
+	await RenderingServer.frame_post_draw
+	img = _tree.root.get_viewport().get_texture().get_image()
+	var guide_err := img.save_png("/tmp/pause_guide.png")
+
+	pause_menu.call("resume_game")
+	print("[TEST] 暂停截图 main_err=%d guide_err=%d" % [err, guide_err])
+	_finish(err == OK and guide_err == OK)
+
+
+### 联机版菜单的外观：标题必须是「游戏菜单」，而且世界没有冻住。
+##
+### 这不是纯截图用例 —— 它同时断言 `set_pausable(false)` 之后
+### `get_tree().paused` 仍是 false。如果哪天有人把暂停和解冻逻辑改回去，
+### 这张图会照样好看，但断言会红。
+func _pauseonlineshot() -> void:
+	var pause_menu = get_parent().get_node_or_null("PauseMenu")
+	if pause_menu == null:
+		print("[TEST] 找不到 PauseMenu")
+		_finish(false)
+		return
+
+	for i in 20:
+		await _tree.process_frame
+
+	pause_menu.call("set_pausable", false)
+	if not bool(pause_menu.call("open_pause")):
+		print("[TEST] 联机菜单打开失败")
+		_finish(false)
+		return
+
+	var paused := _tree.paused
+	var title: Label = pause_menu.get_node("Root/Center/Panel/VBox/Title")
+	# 先抓文案再收菜单：收菜单之后 set_pausable(true) 会把它改回「游戏暂停」，
+	# 那时再读就成了"测试自己改坏的值"。
+	var title_text := title.text
+	for i in 4:
+		await _tree.process_frame
+	await RenderingServer.frame_post_draw
+	var img := _tree.root.get_viewport().get_texture().get_image()
+	var err := img.save_png("/tmp/pause_online.png")
+
+	pause_menu.call("resume_game")
+	pause_menu.call("set_pausable", true)
+	print("[TEST] 联机菜单：标题=\"%s\" 暂停中=%s 截图=%d" % [title_text, str(paused), err])
+	_finish(err == OK and not paused and title_text == "游戏菜单")
 
 
 # ------------------------------------------------------------
@@ -781,7 +1212,8 @@ func _test_shoot() -> void:
 ## 游戏里表现为"开枪没声音"，而且完全不报错。
 func _test_sfx() -> void:
 	var names := ["shot_rifle", "hit_flesh", "hit_head", "hit_wall",
-		"dry_fire", "reload_out", "reload_in", "shove", "shell_drop", "zombie_die"]
+		"dry_fire", "reload_out", "reload_in", "shove", "shell_drop", "zombie_die",
+		"knife_draw", "knife_slash", "knife_stab", "knife_hit"]
 	var ok := true
 	for n in names:
 		var st = Sfx.call("_stream_for", n)
@@ -1044,6 +1476,591 @@ func _inv_total(inv) -> int:
 	return n
 
 
+# ------------------------------------------------------------
+# S12 · 建造：材料消耗 / 拆除返还 / 砍树
+# ------------------------------------------------------------
+func _test_build() -> void:
+	var world := get_parent()
+	var player = null
+	for i in 80:
+		player = world.get_node_or_null("Players/1")
+		if player != null:
+			break
+		await _tree.create_timer(0.05).timeout
+	if player == null:
+		print("[TEST] 玩家没生成")
+		_finish(false)
+		return
+	for i in 4:
+		await _tree.physics_frame
+
+	var ok := true
+	var build = world.get_node("Buildings")
+	var inv = player.inventory
+	inv.clear()
+
+	var terrain: Node3D = world.get_node("Terrain")
+	var town = world.get_node("Town")
+
+	# ---- 0. 主城广场必须禁建（这是正确行为，不是障碍） ----
+	# 先确认它，才能在后面理直气壮地说"城外能建"
+	var spawn_cell := Vector2i(roundi(player.global_position.x / 2.0),
+		roundi(player.global_position.z / 2.0))
+	var blocked_at_spawn: bool = not build._can_place(
+		"foundation", spawn_cell, 0, 0, player.global_position)
+	print("[TEST] 主城禁止建造：%s（期望 true）" % str(blocked_at_spawn))
+	if not blocked_at_spawn:
+		ok = false
+
+	# ---- 走到城外，否则后面全是"禁建" ----
+	# ★ 测试不该迁就世界，而是应该**复现玩家的真实路径**：
+	#   玩家想造房子，本来就得先走出城。所以这里传送等价于"玩家走了 30 米"。
+	var moved := false
+	for a in 12:
+		if moved:
+			break
+		var ang := TAU * float(a) / 12.0
+		var dir := Vector3(cos(ang), 0.0, sin(ang))
+		for d in [14, 20, 26, 32, 40]:
+			var probe: Vector3 = player.global_position + dir * float(d)
+			if town.is_build_blocked(probe):
+				continue
+			probe.y = terrain.height_at(probe.x, probe.z) + 1.4
+			player.velocity = Vector3.ZERO
+			player.global_position = probe
+			moved = true
+			break
+	for i in 5:
+		await _tree.physics_frame
+	print("[TEST] 已移动到城外：%s（位置 %s）" % [str(moved), str(player.global_position.round())])
+	if not moved:
+		print("[TEST]   诊断：12 个方向 40 米内全是禁建区，城镇范围可能过大")
+		_finish(false)
+		return
+
+	# ---- 找一个够得着、可建造的格子 ----
+	var cell := Vector2i.ZERO
+	var found := false
+	for radius in [3, 4, 5, 6, 7]:
+		if found:
+			break
+		for a in 8:
+			var ang := TAU * float(a) / 8.0
+			var probe2: Vector3 = player.global_position \
+				+ Vector3(cos(ang) * float(radius), 0.0, sin(ang) * float(radius))
+			var c := Vector2i(roundi(probe2.x / 2.0), roundi(probe2.z / 2.0))
+			if build._can_place("foundation", c, 0, 0, player.global_position):
+				cell = c
+				found = true
+				break
+	print("[TEST] 城外找到可建造格：%s %s" % [str(found), str(cell)])
+	if not found:
+		print("[TEST]   诊断：城外 7 米内仍无可建造格")
+		_finish(false)
+		return
+
+	# ---- 1. 空背包：放不下，且世界没变化 ----
+	var before: int = build._pieces.size()
+	var r1: bool = build._server_place("foundation", cell, 0, 0, player.global_position, 1)
+	print("[TEST] 空背包造地基：%s（期望 false），建筑数 %d → %d（期望不变）" % [
+		str(r1), before, build._pieces.size()])
+	if r1 or build._pieces.size() != before:
+		ok = false
+
+	# ---- 2. 有材料：成功，且按配方扣料 ----
+	inv.add(ItemDef.WOOD, 10)
+	inv.add(ItemDef.SCRAP, 5)
+	var wood0: int = inv.count_of(ItemDef.WOOD)
+	var scrap0: int = inv.count_of(ItemDef.SCRAP)
+	var r2: bool = build._server_place("foundation", cell, 0, 0, player.global_position, 1)
+	var wood1: int = inv.count_of(ItemDef.WOOD)
+	var scrap1: int = inv.count_of(ItemDef.SCRAP)
+	print("[TEST] 造地基：%s（期望 true），木材 %d→%d 废金属 %d→%d（期望 -2 / -1）" % [
+		str(r2), wood0, wood1, scrap0, scrap1])
+	if not r2 or wood0 - wood1 != 2 or scrap0 - scrap1 != 1:
+		ok = false
+
+	# ---- 3. 材料只够一半时：拒绝，且一分钱都不扣 ----
+	# ★ 这条比"完全没材料"重要得多：部分扣料是最隐蔽的 bug ——
+	#   玩家只看到"我明明有材料却造不出东西"，查起来却毫无线索。
+	# 门框需要 木材 ×3 + 废金属 ×2，这里只给木材 5、一点金属都没有。
+	inv.clear()
+	inv.add(ItemDef.WOOD, 5)
+	var wood_only: int = inv.count_of(ItemDef.WOOD)
+	var cell2 := cell + Vector2i(2, 0)
+	if not build._can_place("door", cell2, 0, 0, player.global_position):
+		cell2 = cell          # 兜底：用刚才那格（门框和地基占位键不同，不冲突）
+	var r3: bool = build._server_place("door", cell2, 0, 0,
+		player.global_position, 1)
+	print("[TEST] 只有木材没有废金属造门框：%s（期望 false），木材 %d → %d（期望不变）" % [
+		str(r3), wood_only, inv.count_of(ItemDef.WOOD)])
+	if r3 or inv.count_of(ItemDef.WOOD) != wood_only:
+		ok = false
+
+	# ---- 4. 拆除返还（按配方一半向下取整） ----
+	var target_id := 0
+	for id in build._pieces:
+		if build._pieces[id]["cell"] == cell:
+			target_id = int(id)
+			break
+	var expect_back := int(RecipeDef.refund_of("foundation").get(ItemDef.WOOD, 0))
+	var wood_before: int = inv.count_of(ItemDef.WOOD)
+	if target_id > 0:
+		build._server_remove(target_id, 1)
+	await _tree.create_timer(0.06).timeout
+	var back: int = inv.count_of(ItemDef.WOOD) - wood_before
+	print("[TEST] 拆除返还：木材 +%d（期望 %d）" % [back, expect_back])
+	if back != expect_back:
+		ok = false
+
+	# ---- 5. 砍树：3 下，每下 2 木材，倒下那下额外 3 ----
+	var trees: Node3D = world.get_node("Trees")
+	inv.clear()
+	var tree = trees.get_child(0)
+	var want: int = int(tree.WOOD_PER_CHOP) * int(tree.MAX_CHOPS) + int(tree.WOOD_FELL_BONUS)
+	var fwd: Vector3 = -player.global_transform.basis.z
+	tree.global_position = player.global_position + fwd * 1.8
+	await _tree.physics_frame
+	for i in int(tree.MAX_CHOPS):
+		tree.interact(player)
+		await _tree.create_timer(0.06).timeout
+	var got_wood: int = inv.count_of(ItemDef.WOOD)
+	print("[TEST] 砍倒一棵树：木材 +%d（期望 %d），已倒下=%s" % [
+		got_wood, want, str(tree.get("_falling"))])
+	if got_wood != want or not bool(tree.get("_falling")):
+		ok = false
+
+	inv.clear()
+	_finish(ok)
+
+
+# ------------------------------------------------------------
+# S12 截图：建造图鉴 + 亲手搭的一面墙
+# ------------------------------------------------------------
+func _build_shot() -> void:
+	for i in 40:
+		await _tree.process_frame
+
+	var world := get_parent()
+	var player = world.get_node_or_null("Players/1")
+	if not is_instance_valid(player):
+		print("[TEST] 玩家没生成")
+		_finish(false)
+		return
+	var terrain: Node3D = world.get_node("Terrain")
+	var town = world.get_node("Town")
+	var build = world.get_node("Buildings")
+
+	# 走到城外（主城禁建，这是设计，不是 bug）
+	var moved := false
+	for a in 12:
+		if moved:
+			break
+		var ang := TAU * float(a) / 12.0
+		var dir := Vector3(cos(ang), 0.0, sin(ang))
+		for d in [14, 20, 26, 32]:
+			var probe: Vector3 = player.global_position + dir * float(d)
+			if town.is_build_blocked(probe):
+				continue
+			probe.y = terrain.height_at(probe.x, probe.z) + 1.4
+			player.velocity = Vector3.ZERO
+			player.global_position = probe
+			moved = true
+			break
+	for i in 6:
+		await _tree.physics_frame
+	if not moved:
+		print("[TEST] 走不到城外，跳过建造截图")
+		_finish(false)
+		return
+
+	# 材料给足：截图要看到"可造"的绿色，而不是一片红
+	player.inventory.clear()
+	player.inventory.add(ItemDef.WOOD, 40)
+	player.inventory.add(ItemDef.SCRAP, 12)
+	GameState.inventory_changed.emit(player.inventory)
+
+	# 在玩家前方搭一排：地基×3，墙上左，门框中，墙右
+	#
+	# ★ 不能假设"前方三个格子都能建"：山坡上相邻格子的高度差可能超过
+	#   REACH_UP/REACH_DOWN，_can_place 会正确地拒绝（不允许悬空造地基）。
+	#   所以这里要先探测出一段**连续可建**的格子，而不是硬点三个位置。
+	var fwd: Vector3 = -player.global_transform.basis.z
+	var right: Vector3 = player.global_transform.basis.x
+	var front: Vector3 = player.global_position + fwd * 4.0
+	var base := Vector2i(roundi(front.x / 2.0), roundi(front.z / 2.0))
+
+	var run: Array = []
+	for axis in [Vector2i(1, 0), Vector2i(0, 1)]:
+		if not run.is_empty():
+			break
+		for sign_v in [-1, 1]:
+			if not run.is_empty():
+				break
+			var d: Vector2i = axis * sign_v
+			for k in 4:
+				var start: Vector2i = base + d * k
+				if build._can_place("foundation", start, 0, 0, player.global_position) \
+						and build._can_place("foundation", start + d, 0, 0, player.global_position) \
+						and build._can_place("foundation", start + d * 2, 0, 0, player.global_position):
+					run = [start, start + d, start + d * 2]
+					break
+	print("[DBG] 连续可建格：%s" % str(run))
+
+	var built := 0
+	var c_left := base + Vector2i(-1, 0)
+	var c_mid := base
+	var c_right := base + Vector2i(1, 0)
+	if run.size() == 3:
+		c_left = run[0]
+		c_mid = run[1]
+		c_right = run[2]
+	for c in [c_left, c_mid, c_right]:
+		if build._server_place("foundation", c, 0, 0, player.global_position, 1):
+			built += 1
+	for i in 4:
+		await _tree.physics_frame
+	# 墙和门框也逐块判定，失败的跳过（不因为一块失败就整张图不拍）
+	print("[DBG] wall   -> %s" % str(build._server_place("wall", c_left, 0, 0, player.global_position, 1)))
+	print("[DBG] door   -> %s" % str(build._server_place("door", c_mid, 0, 0, player.global_position, 1)))
+	print("[DBG] wall   -> %s" % str(build._server_place("wall", c_right, 0, 0, player.global_position, 1)))
+	for i in 6:
+		await _tree.process_frame
+
+	# 退后几步再拍：三块墙拼起来有 6 米宽，站在 4 米外会糊满整个画面，
+	# 拍出来只有"一片米色"，看不出这是墙
+	var back_step: Vector3 = -fwd * 3.0
+	player.velocity = Vector3.ZERO
+	player.global_position = player.global_position + back_step + right * -1.4
+	for i in 6:
+		await _tree.physics_frame
+
+	# 打开建造模式：图鉴条会出现在底部
+	build._set_build_mode(true)
+	GameState.build_kind = "door"
+	# 截图专用：关掉建造管理器的每帧瞄准更新并隐藏幽灵块。
+	# 幽灵是那块半透明的绿色预览 —— 玩的时候必须有，
+	# 但在照片里它就变成"地上莫名其妙的一块绿"，掩盖了真正的建筑。
+	build.set_process(false)
+	var ghost = build.get("_ghost")
+	if ghost != null:
+		ghost.visible = false
+	# 视角压低一点，让墙和图鉴同时入画
+	player.set("_pitch", -0.10)
+	var head := player.get_node_or_null("Head")
+	if head != null:
+		head.rotation.x = -0.10
+	for i in 12:
+		await _tree.process_frame
+	await RenderingServer.frame_post_draw
+
+	for id in build._pieces:
+		var pi: Dictionary = build._pieces[id]
+		print("[DBG] 已建 id=%d kind=%s cell=%s level=%d base=%.1f" % [
+			int(id), String(pi["kind"]), str(pi["cell"]), int(pi["level"]), float(pi["base"])])
+
+	var img := _tree.root.get_viewport().get_texture().get_image()
+	var path := "/tmp/sandbox_build.png"
+	if img.save_png(path) == OK:
+		print("[TEST] 截图 %s（已建 %d 块地基 + 2 墙 + 1 门框）" % [path, built])
+	build._set_build_mode(false)
+	_finish(true)
+
+
+# ------------------------------------------------------------
+# S13 · 启动意图与存档归属
+# ------------------------------------------------------------
+### 验证"这次启动是什么模式"只有 Launch 一个答案。
+func _test_launch() -> void:
+	var ok := true
+
+	# 自检自己就是用 --solo 跑的，所以这里能验证解析结果
+	print("[TEST] Launch.mode=%s（期望 单机） direct=%s account_required=%s" % [
+		Launch.mode_name(), str(Launch.direct), str(Launch.account_required)])
+	if Launch.mode != Launch.Mode.SOLO:
+		ok = false
+	if not Launch.direct:
+		ok = false
+	if Launch.account_required:
+		ok = false
+
+	# ★ 最关键的一条：自检期间存档后端必须是 NONE。
+	#   否则每跑一次测试，玩家的真实存档就被覆盖一次 —— 这种 bug
+	#   不会报错，只会在某天玩家发现"我的东西没了"。
+	var backend: int = AccountSession.call("_pick_backend")
+	print("[TEST] 自检时的存档后端=%d（期望 0=NONE，不能碰真实存档）" % backend)
+	if backend != 0:
+		ok = false
+
+	_finish(ok)
+
+
+### 验证"本地玩家"找的是自己，以及本地存档能原样往返。
+func _test_profile() -> void:
+	var world := get_parent()
+	var player = null
+	for i in 60:
+		player = world.get_node_or_null("Players/1")
+		if player != null:
+			break
+		await _tree.create_timer(0.05).timeout
+	if player == null:
+		print("[TEST] 玩家没生成")
+		_finish(false)
+		return
+	for i in 4:
+		await _tree.physics_frame
+
+	var ok := true
+
+	# ---- 1. 本地玩家必须按"我的 peer_id"查，不能写死 1 ----
+	var me: Node = AccountSession.call("_local_player")
+	var my_id: int = multiplayer.get_unique_id()
+	var matched := me != null and int(me.name) == my_id
+	print("[TEST] 本地玩家查找：找到=%s 节点名=%s 我的 peer_id=%d（期望一致）" % [
+		str(me != null), str(me.name) if me != null else "-", my_id])
+	if not matched:
+		ok = false
+
+	# ---- 2. 本地存档往返 ----
+	# 写到临时路径，绝不碰真正的 user://local_save.json
+	var tmp := "user://__selftest_save.json"
+	if FileAccess.file_exists(tmp):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+
+	var empty: Dictionary = AccountSession.call("_read_local_save", tmp)
+	print("[TEST] 无文件时读取：%d 键（期望 0）" % empty.size())
+	if not empty.is_empty():
+		ok = false
+
+	var payload := {
+		"equipmentData": {"item": 3},
+		"gameProgress": {"position": [1.5, 6.0, -2.25], "yaw": 0.75, "play_seconds": 42},
+		"characterStats": {"hp": 77.0, "inventory": [{"id": "wood", "count": 4}], "weapon": {"ammo": 12, "reserve": 88}},
+		"saveVersion": 1,
+	}
+	var wrote: bool = AccountSession.call("_write_local_save", payload, tmp)
+	var back: Dictionary = AccountSession.call("_read_local_save", tmp)
+	var pos: Array = back.get("gameProgress", {}).get("position", [])
+	print("[TEST] 存档往返：写入=%s 位置=%s 时长=%s（期望 [1.5,6,-2.25] / 42）" % [
+		str(wrote), str(pos), str(back.get("gameProgress", {}).get("play_seconds"))])
+	if not wrote or pos.size() != 3 or absf(float(pos[0]) - 1.5) > 0.001:
+		ok = false
+	if int(back.get("gameProgress", {}).get("play_seconds", 0)) != 42:
+		ok = false
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+
+	# ---- 3. 装备格式兼容：旧 {peer_id: item} 与新 {item: n} 都要认 ----
+	var old_fmt: int = AccountSession.call("_equipment_from_save", {"equipment": {"1": 5}})
+	var new_fmt: int = AccountSession.call("_equipment_from_save", {"equipment": {"item": 7}})
+	var none_fmt: int = AccountSession.call("_equipment_from_save", {"equipment": {}})
+	print("[TEST] 装备读取：旧格式=%d 新格式=%d 空=%d（期望 5 / 7 / 0）" % [
+		old_fmt, new_fmt, none_fmt])
+	if old_fmt != 5 or new_fmt != 7 or none_fmt != 0:
+		ok = false
+
+	_finish(ok)
+
+
+### 房间菜单阶段：没有 peer，但世界已经跑起来了。
+##
+### 这一屏是"不再强制单机"之后新出现的一个状态。
+### 它最容易出的问题不是功能，而是**每帧的多人 API 调用没有 peer 可问**，
+### 于是控制台被 "No multiplayer peer is assigned" 刷满 ——
+### 真正的报错会被埋掉，所以这里有断言。
+func _test_lobby() -> void:
+	var world := get_parent()
+	for i in 40:
+		await _tree.process_frame
+
+	var ok := true
+	var menu := world.get_node_or_null("Menu") as CanvasLayer
+	var visible := menu != null and menu.visible
+	print("[TEST] 房间菜单可见=%s（期望 true，说明登录后没有被强制进游戏）" % str(visible))
+	if not visible:
+		ok = false
+
+	print("[TEST] 当前有会话=%s（期望 false：还没点创建/加入）" % str(Net.has_session()))
+	if Net.has_session():
+		ok = false
+
+	# 在线人数那一栏在没会话时必须是空的，不能显示"在线：1"
+	var hud = world.get_node_or_null("HUD")
+	var players_label: Label = hud.get_node_or_null("Status/Players") if hud != null else null
+	if players_label != null:
+		print("[TEST] 在线人数标签=\"%s\"（期望空）" % players_label.text)
+		if not players_label.text.is_empty():
+			ok = false
+
+	# 菜单里应该显示"已登录 xxx"
+	var acc: Label = menu.get_node_or_null("Center/VBox/Account") if menu != null else null
+	if acc != null:
+		print("[TEST] 菜单账号行=\"%s\"" % acc.text)
+
+	# ---- 第二阶段：模拟"点了创建房间" ----
+	# 这一步以前根本走不到：登录路径会被强制单机，联机路径又没有账号。
+	# 现在它是最常见的路径，所以必须验证"从无 peer 变成有 peer"这一跳。
+	world.call("_on_host_pressed")
+	var spawned := false
+	for i in 80:
+		if world.get_node_or_null("Players/1") != null:
+			spawned = true
+			break
+		await _tree.create_timer(0.05).timeout
+	print("[TEST] 创建房间后玩家生成=%s（期望 true）" % str(spawned))
+	if not spawned:
+		_finish(false)
+		return
+
+	print("[TEST] 有会话=%s 是服务器=%s（期望 true / true）" % [
+		str(Net.has_session()), str(multiplayer.is_server())])
+	if not Net.has_session() or not multiplayer.is_server():
+		ok = false
+
+	# 菜单要让开，HUD 要接管
+	var menu_hidden := menu != null and not menu.visible
+	print("[TEST] 房间菜单已隐藏=%s HUD 可见=%s（期望都为 true）" % [
+		str(menu_hidden), str(hud != null and hud.visible)])
+	if not menu_hidden or hud == null or not hud.visible:
+		ok = false
+
+	# 玩家节点名必须等于我的 peer_id —— 这就是 S13 修的那个硬编码
+	var me: Node = world.get_node_or_null("Players/%d" % multiplayer.get_unique_id())
+	print("[TEST] 本地玩家节点=%s（期望存在）" % str(me != null))
+	if me == null:
+		ok = false
+
+	# ★ 无头模式必须整段跳过，不能只判空。
+	#   `RenderingServer.frame_post_draw` 在没有渲染目标时**永远不会触发**，
+	#   于是 await 卡死，最后被 world 里的看门狗强杀 —— 报错是
+	#   "[TEST] 超时未完成"，看起来像测试逻辑坏了，其实是等了一个不会来的信号。
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var img := _tree.root.get_viewport().get_texture().get_image()
+		if img != null:
+			var path := "/tmp/sandbox_lobby.png"
+			if img.save_png(path) == OK:
+				print("[TEST] 截图 %s" % path)
+
+	_finish(ok)
+
+
+### 单机退出：这条路径以前是死的 —— 点「退出登录」啥也不发生。
+##
+### ★ 为什么这里只验"判定 + 文案"，不去真的切场景：
+##   探针自己就挂在世界场景里，`change_scene_to_file` 会把它一起 free 掉，
+##   于是没有人能打印 PASS，看门狗 90 秒后按超时退出 ——
+##   那会把"功能正常"报成"[TEST] 超时"，比不测更误导。
+##   真正的场景跳转留给真机验证（单机 → 退出 → 回开始页）。
+func _test_logout() -> void:
+	var ok := true
+	var old_backend: int = AccountSession.get("_backend")
+
+	# ---- 1. 本地会话（单机）：不能去登录页 ----
+	AccountSession.set("_backend", 1)   # AccountSession.Backend.LOCAL
+	var local_needs_login: bool = AccountSession.call("_logout_needs_login")
+	print("[TEST] 单机退出→登录页=%s（期望 false：本地档案回开始页）" % str(local_needs_login))
+	if local_needs_login:
+		ok = false
+
+	# ---- 2. 云端会话但 token 已失效：同样不该把玩家卡在"回登录页"这条路上 ----
+	#     没有身份就没有"该写进谁的档案"，回开始页重选才是对的。
+	AccountSession.set("_backend", 2)   # AccountSession.Backend.CLOUD
+	if Account.is_logged_in():
+		print("[TEST] 本机仍持有登录状态，跳过「云端 + 失效」判定（只在没登录时可测）")
+	else:
+		var expired_needs_login: bool = AccountSession.call("_logout_needs_login")
+		print("[TEST] 云端未登录→登录页=%s（期望 false）" % str(expired_needs_login))
+		if expired_needs_login:
+			ok = false
+	AccountSession.set("_backend", old_backend)
+
+	# ---- 3. 徽章文案：单机不能继续写「退出登录」 ----
+	#     按钮写什么就必须做什么 —— 上一版文案说"退出登录"，
+	#     实际在单机下什么都不做，这就是玩家看到的"点了没用"。
+	var badge: CanvasLayer = load("res://scenes/account/account_badge.tscn").instantiate()
+	add_child(badge)
+
+	badge.call("setup", "本地档案", false)
+	var solo_text: String = badge.get_node("Root/Panel/HBox/VBox/Logout").text
+	var solo_rank: bool = badge.get_node("Root/Panel/HBox/VBox/Leaderboard").visible
+	var solo_meta: String = badge.get_node("Root/Panel/HBox/VBox/Meta").text
+	print("[TEST] 单机徽章：按钮=\"%s\" 排行榜可见=%s 档案类型=\"%s\"（期望 退出到开始页 / false / 本地档案）" % [
+		solo_text, str(solo_rank), solo_meta])
+	if solo_text != "退出到开始页" or solo_rank or solo_meta != "本地档案":
+		ok = false
+
+	badge.call("setup", "玩家甲", true)
+	var cloud_text: String = badge.get_node("Root/Panel/HBox/VBox/Logout").text
+	var cloud_rank: bool = badge.get_node("Root/Panel/HBox/VBox/Leaderboard").visible
+	print("[TEST] 联机徽章：按钮=\"%s\" 排行榜可见=%s（期望 退出登录 / true）" % [
+		cloud_text, str(cloud_rank)])
+	if cloud_text != "退出登录" or not cloud_rank:
+		ok = false
+
+	badge.queue_free()
+
+	# ---- 4. 离场兜底：所有输入锁必须被清空 ----
+	#     以前只 release "pause" / "leaderboard"，死者身上的 "dead" 会留到下一局，
+	#     表现是"重新进游戏按 WASD 不动"。
+	GameState.claim_ui("dead")
+	GameState.claim_ui("bag")
+	GameState.claim_ui("pause")
+	GameState.clear_ui()
+	print("[TEST] 离场后还有输入锁=%s（期望 false）" % str(GameState.ui_captures_input))
+	if GameState.ui_captures_input:
+		ok = false
+
+	_finish(ok)
+
+
+### 真机路径：单机点「退出登录」必须真的离开世界。
+##
+### ★ 为什么这个测试要先把探头"搬家"：
+##   退出会 `change_scene_to_file`，挂在世界节点下的探头会被一起 free，
+##   于是没人能打印 PASS —— 看门狗 90 秒后按"[TEST] 超时未完成"杀掉进程，
+##   一个正常的行为被报成故障。所以先把探头摘下来挂到 root（不会随场景释放），
+##   它才能站在场外看"世界有没有真的被换掉"。
+##
+### 这是本次修复的**唯一硬证据**：旧实现在最后一行 `return` 掉，
+### 场景永远停在 world.tscn，这个断言就会实实在在失败。
+func _test_logout_live() -> void:
+	# 先让世界把 _ready 跑完（玩家、Net.host、存档后端都就位）再搬家
+	for i in 6:
+		await _tree.process_frame
+
+	var world := get_parent()
+	world.remove_child(self)
+	_tree.root.add_child(self)
+
+	# 等玩家真正生成：否则测的是"还没开始就退出"，通过也不算数
+	for i in 60:
+		if world.get_node_or_null("Players/1") != null:
+			break
+		await _tree.process_frame
+
+	var before: String = _tree.current_scene.scene_file_path if _tree.current_scene != null else ""
+	print("[TEST] 退出前场景=%s 玩家已生成=%s（期望 world.tscn / true）" % [
+		before, str(world.get_node_or_null("Players/1") != null)])
+
+	AccountSession.call("logout_to_login")
+
+	var reached := before
+	for i in 120:
+		await _tree.process_frame
+		if _tree.current_scene != null:
+			reached = _tree.current_scene.scene_file_path
+		# 登录页出现就说明判错了（单机不该被要求登录）
+		if reached != before:
+			break
+
+	print("[TEST] 退出后场景=%s（期望 start.tscn：单机回开始页）" % reached)
+	var ok: bool = before == "res://scenes/world.tscn" \
+		and reached == "res://scenes/start/start.tscn"
+	_finish(ok)
+
+
 func _finish(ok: bool) -> void:
 	if ok:
 		print("[TEST] PASS")
@@ -1065,6 +2082,12 @@ func _finish(ok: bool) -> void:
 ## 最后再等一次 frame_post_draw，确保读到的是"这一帧画完"的 framebuffer，
 ## 而不是上一帧的残留。
 func _shot() -> void:
+	var pause_menu = get_parent().get_node_or_null("PauseMenu")
+	if pause_menu != null:
+		if bool(pause_menu.call("is_open")):
+			pause_menu.call("resume_game")
+		pause_menu.call("set_enabled", false)
+
 	for i in 40:
 		await _tree.process_frame
 

@@ -20,6 +20,13 @@ extends Node3D
 const BASE_POS := Vector3(0.148, -0.118, -0.306)
 const VIEW_SCALE := 0.75
 const BASE_ROT := Vector3(0.0, 0.015, 0.0)
+const HOLSTER_POS := BASE_POS + Vector3(0.080, -0.380, 0.140)
+const HOLSTER_ROT := BASE_ROT + Vector3(-0.55, 0.45, -0.38)
+const EQUIP_LOW_POS := BASE_POS + Vector3(0.070, -0.360, 0.160)
+const EQUIP_LOW_ROT := BASE_ROT + Vector3(-0.48, 0.38, -0.28)
+const BOLT_PULL_DISTANCE := 0.055
+
+signal bolt_racked
 
 var weapon_id := "ak47"
 var muzzle: Node3D
@@ -38,6 +45,17 @@ var _sway_target := Vector2.ZERO
 var _bob_t := 0.0
 var _reload_t := 0.0
 
+# 切枪过渡：收枪和抬枪都从"当前这一帧的真实姿态"开始，
+# 这样换弹到一半切刀时，枪不会先瞬移回普通待机姿势。
+var _transition := "idle"       # idle / holster / equip / stowed / return
+var _transition_t := 0.0
+var _transition_duration := 0.0
+var _transition_from_pos := BASE_POS
+var _transition_from_rot := BASE_ROT
+var _bolt_handle: MeshInstance3D
+var _bolt_rest_pos := Vector3(0.040, 0.026, -0.10)
+var _bolt_racked_sent := false
+
 # 由玩家每帧写入
 var move_speed := 0.0
 var on_floor := true
@@ -47,6 +65,8 @@ var reload_ratio := 0.0
 
 func _ready() -> void:
 	scale = Vector3.ONE * VIEW_SCALE
+	position = BASE_POS
+	rotation = BASE_ROT
 	_build(weapon_id)
 
 
@@ -65,6 +85,7 @@ func _build(id: String) -> void:
 		if is_instance_valid(m):
 			m.queue_free()
 	_meshes.clear()
+	_bolt_handle = null
 	if muzzle != null:
 		muzzle.queue_free()
 		muzzle = null
@@ -87,7 +108,8 @@ func _build(id: String) -> void:
 			# 防尘盖：半埋在机匣上方的圆柱。AK 的机匣顶部是拱形，
 			# 用圆柱一盖，方盒子的硬棱就消失了，剪影立刻从"砖头"变成"枪"
 			_cyl(0.042, 0.34, Vector3(0, 0.010, -0.10), blued, 14)
-			_box(Vector3(0.030, 0.010, 0.012), Vector3(0.040, 0.026, -0.10), steel) # 拉机柄
+			_bolt_handle = _box(Vector3(0.030, 0.010, 0.012),
+				_bolt_rest_pos, steel) # 拉机柄
 
 			# 护木是圆柱而不是盒子 —— AK 的护木本来就是圆的，
 			# 而且圆面能接到环境光的连续渐变，边缘不会有硬阶梯
@@ -387,6 +409,51 @@ func kick(strength := 1.0) -> void:
 		_flash_light.light_energy = 4.0 * strength
 
 
+### 枪被收起：从当前姿态连续压到画面下方。
+## 不在开始时重置 reload 姿态，是修复"换弹中途切刀会先弹回普通持枪"的关键。
+func play_holster(duration := 0.30) -> void:
+	_begin_transition("holster", duration, position, rotation)
+
+
+### 切回 AK：从画面下方抬起，拉动拉机柄再复位。
+## duration 与 Combat 的主武器 DRAW 阶段保持一致，期间由 Combat 锁住开火。
+func play_equip(duration := 0.55) -> void:
+	_begin_transition("equip", duration, EQUIP_LOW_POS, EQUIP_LOW_ROT)
+	_bolt_racked_sent = false
+
+
+### 切枪被取消：从当前姿态平滑回到正常持枪。
+func cancel_transition() -> void:
+	if _transition == "idle" or _transition == "stowed":
+		return
+	_begin_transition("return", 0.14, position, rotation)
+
+
+func is_holstering() -> bool:
+	return _transition == "holster"
+
+
+func is_equipping() -> bool:
+	return _transition == "equip"
+
+
+func is_busy() -> bool:
+	return (_transition == "holster"
+		or _transition == "equip"
+		or _transition == "return")
+
+
+func _begin_transition(state: String, duration: float, from_pos: Vector3,
+		from_rot: Vector3) -> void:
+	_transition = state
+	_transition_t = 0.0
+	_transition_duration = maxf(0.01, duration)
+	_transition_from_pos = from_pos
+	_transition_from_rot = from_rot
+	if _bolt_handle != null and state != "equip":
+		_bolt_handle.position = _bolt_rest_pos
+
+
 ### 鼠标移动时调用：枪会"跟不上"你的转身，产生重量感
 func add_sway(rel: Vector2) -> void:
 	_sway_target.x = clampf(-rel.x * 0.00035, -0.02, 0.02)
@@ -417,19 +484,33 @@ func _process(delta: float) -> void:
 	else:
 		_bob_t = lerp(_bob_t, 0.0, delta * 4.0)
 
-	# 换弹：枪往下压并侧转，按进度给出"塞弹匣"的顿挫
-	var reload_off := 0.0
-	var reload_rot := 0.0
-	if reloading:
-		_reload_t = lerp(_reload_t, 1.0, delta * 8.0)
-		var p := sin(reload_ratio * PI)      # 0→1→0，中途最深
-		reload_off = -0.10 * p
-		reload_rot = 0.55 * p
+	if _transition == "stowed":
+		position = HOLSTER_POS
+		rotation = HOLSTER_ROT
+	elif _transition != "idle":
+		_process_transition(delta)
 	else:
-		_reload_t = lerp(_reload_t, 0.0, delta * 8.0)
+		# 换弹：枪往下压并侧转，按进度给出"塞弹匣"的顿挫
+		var reload_off := 0.0
+		var reload_rot := 0.0
+		if reloading:
+			_reload_t = lerp(_reload_t, 1.0, delta * 8.0)
+			var p := sin(reload_ratio * PI)      # 0→1→0，中途最深
+			reload_off = -0.10 * p
+			reload_rot = 0.55 * p
+		else:
+			_reload_t = lerp(_reload_t, 0.0, delta * 8.0)
 
-	position = BASE_POS + Vector3(_sway.x, _sway.y + bob.y + reload_off - _kick_z * 0.25, _kick_z) + bob
-	rotation = BASE_ROT + Vector3(-_kick_rot, _sway.x * 1.2, reload_rot + _sway.x * 0.6)
+		position = BASE_POS + Vector3(
+			_sway.x,
+			_sway.y + bob.y + reload_off - _kick_z * 0.25,
+			_kick_z) + bob
+		rotation = BASE_ROT + Vector3(
+			-_kick_rot,
+			_sway.x * 1.2,
+			reload_rot + _sway.x * 0.6)
+		if _bolt_handle != null:
+			_bolt_handle.position = _bolt_rest_pos
 
 	# 枪口火光衰减
 	if _flash_t > 0.0:
@@ -439,6 +520,53 @@ func _process(delta: float) -> void:
 				_flash.visible = false
 	if _flash_light != null and _flash_light.light_energy > 0.0:
 		_flash_light.light_energy = maxf(0.0, _flash_light.light_energy - delta * 90.0)
+
+
+func _process_transition(delta: float) -> void:
+	_transition_t += delta
+	var p := clampf(_transition_t / _transition_duration, 0.0, 1.0)
+
+	match _transition:
+		"holster":
+			var e := p * p
+			position = _transition_from_pos.lerp(HOLSTER_POS, e)
+			rotation = _transition_from_rot.lerp(HOLSTER_ROT, e)
+			if p >= 1.0:
+				_transition = "stowed"
+		"equip":
+			var rise := smoothstep(0.0, 0.58, p)
+			position = EQUIP_LOW_POS.lerp(BASE_POS, rise)
+			rotation = EQUIP_LOW_ROT.lerp(BASE_ROT, rise)
+
+			# 拉栓节奏：先向后拉机柄，短暂停住，再让它弹回最前方。
+			var bolt := 0.0
+			if p >= 0.54 and p < 0.74:
+				bolt = smoothstep(0.54, 0.74, p)
+			elif p >= 0.74 and p < 0.90:
+				bolt = 1.0 - smoothstep(0.74, 0.90, p)
+			position += Vector3(0.0, 0.012 * bolt, 0.010 * bolt)
+			rotation += Vector3(0.12 * bolt, -0.08 * bolt, 0.10 * bolt)
+			if _bolt_handle != null:
+				_bolt_handle.position = _bolt_rest_pos + Vector3(
+					0.004 * bolt, 0.0, BOLT_PULL_DISTANCE * bolt)
+
+			if p >= 0.86 and not _bolt_racked_sent:
+				_bolt_racked_sent = true
+				bolt_racked.emit()
+			if p >= 1.0:
+				_transition = "idle"
+				position = BASE_POS
+				rotation = BASE_ROT
+				if _bolt_handle != null:
+					_bolt_handle.position = _bolt_rest_pos
+		"return":
+			var e := smoothstep(0.0, 1.0, p)
+			position = _transition_from_pos.lerp(BASE_POS, e)
+			rotation = _transition_from_rot.lerp(BASE_ROT, e)
+			if p >= 1.0:
+				_transition = "idle"
+				position = BASE_POS
+				rotation = BASE_ROT
 
 
 ### 枪口的世界坐标（曳光起点）。没有 muzzle 节点时退回本节点位置
